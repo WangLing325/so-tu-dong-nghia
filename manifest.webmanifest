@@ -1,0 +1,29 @@
+{
+ "name": "Sổ Từ Đồng Nghĩa",
+ "short_name": "Sổ Từ",
+ "description": "Học thuộc từ vựng tiếng Anh qua từ đồng nghĩa, trái nghĩa và nghĩa tiếng Việt.",
+ "lang": "vi",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#F2F5EF",
+ "theme_color": "#3B6A1D",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
