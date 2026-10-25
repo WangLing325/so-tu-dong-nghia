@@ -243,7 +243,8 @@ textarea{min-height:260px;font-family:var(--f-ipa);font-size:1.02rem;line-height
 .check{display:flex;gap:8px;align-items:center;font-size:.9rem;cursor:pointer}
 .check input{width:16px;height:16px;accent-color:var(--moss)}
 details.fmt summary{cursor:pointer}
-.fmt a{color:var(--moss);font-weight:600}
+.fmt a:not(.btn){color:var(--moss);font-weight:600}
+a.btn{text-decoration:none;color:inherit}
 body.dragging .wrap{outline:2px dashed var(--moss);outline-offset:6px;border-radius:12px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;
   background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:.9rem;transition:opacity .2s, transform .2s;max-width:calc(100% - 32px)}
@@ -956,11 +957,27 @@ Example: {"night-active":"ˌnaɪt ˈæktɪv","scarce":"skeəs"}
 }
 
 /* ---------- 6. decks + import ---------- */
+function geminiAppPanel(){
+  return `<details class="fmt" id="gappbox" open><summary><b>Đọc bằng ứng dụng Gemini</b> <span class="muted">· dùng gói Gemini Pro của bạn, không giới hạn lượt</span></summary>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+        <li>Bấm <b>Sao chép câu lệnh</b>, rồi bấm <b>Mở Gemini</b>.</li>
+        <li>Trong Gemini: dán câu lệnh (Ctrl+V), đính kèm ảnh trang từ vựng, rồi gửi.</li>
+        <li>Gemini trả về một khung code: bấm nút <b>sao chép</b> ở góc khung đó.</li>
+        <li>Quay lại đây, dán vào ô bên dưới (hoặc bấm Ctrl+V ở bất cứ đâu trên trang). Ứng dụng tự lưu bài và mở thẻ học.</li>
+      </ol>
+      <div class="row-btns"><button class="btn small primary" type="button" data-act="gappcopy">Sao chép câu lệnh</button><a class="btn small" href="https://gemini.google.com/app" target="_blank" rel="noopener">Mở Gemini ↗</a></div>
+      <textarea id="gapprompt" readonly hidden style="min-height:140px;font-size:.8rem;font-family:var(--f-body)">${esc(GEMINI_APP_PROMPT)}</textarea>
+      <label style="display:flex;flex-direction:column;gap:4px" for="gapppaste"><span class="label">Dán kết quả từ Gemini</span>
+        <textarea id="gapppaste" spellcheck="false" style="min-height:90px;font-family:var(--f-body);font-size:.9rem" placeholder='\`\`\`json {"title": "...", "entries": [ ... ]} \`\`\`'></textarea></label>
+      <div class="row-btns"><button class="btn small primary" type="button" data-act="gappimport">Lưu và bắt đầu học</button></div>
+    </div></details>`;
+}
 let engKind=null, gemState={busy:false,msg:'',err:false,models:[]};
 function geminiPanel(){
   const on=!!(settings.geminiKey && settings.geminiModel);
   const models=gemState.models.length?gemState.models:(settings.geminiModel?[settings.geminiModel]:[]);
-  return `<details class="fmt" id="gembox" ${on||gemState.msg?'':''}><summary><b>Đọc ảnh bằng Gemini</b> <span class="muted">· ${on?`đang bật (${esc(settings.geminiModel)})`:'chưa bật, đang dùng OCR miễn phí'}</span></summary>
+  return `<details class="fmt" id="gembox" ${on||gemState.msg?'':''}><summary><b>Tự động đọc ảnh bằng khóa API Gemini</b> <span class="muted">· ${on?`đang bật (${esc(settings.geminiModel)})`:'chưa bật, đang dùng OCR miễn phí'}</span></summary>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
       <p style="margin:0">Gemini đọc ảnh chính xác hơn OCR miễn phí, tự sửa lỗi chính tả và điền nghĩa tiếng Việt, từ loại, phiên âm. Khóa API miễn phí, không tốn usage của Claude.</p>
       <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px">
@@ -1026,6 +1043,7 @@ function renderDecks(){
       <input type="file" id="imgin" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
     </div>
     ${imgOK===false?`<p class="muted" style="margin:0;font-size:.88rem">Đọc ảnh tự động không dùng được ở đây. Hãy gõ hoặc dán danh sách từ theo định dạng bên dưới.</p>`:''}
+    ${geminiAppPanel()}
     ${IS_LOCAL?geminiPanel():''}
     ${imgOK!==false?`<label class="check" for="autosave"><input type="checkbox" id="autosave" ${settings.autoSave?'checked':''}> Tự lưu và vào học ngay sau khi đọc ảnh</label>`:''}
     <label style="display:flex;flex-direction:column;gap:4px" for="etext"><span class="label">Danh sách từ · mỗi dòng một từ</span>
@@ -1056,9 +1074,15 @@ function renderDecks(){
   drop.addEventListener('drop',ev=>{ ev.preventDefault(); ev.stopPropagation(); drop.classList.remove('over'); const fs=[...ev.dataTransfer.files].filter(f=>f.type.startsWith('image/')); if(fs.length) readImages(fs); });
 }
 document.addEventListener('paste',ev=>{
-  if(imgOK===false) return;
   const fs=[...(ev.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));
-  if(fs.length){ ev.preventDefault(); openImages(fs); }
+  if(fs.length){ if(imgOK===false) return; ev.preventDefault(); openImages(fs); return; }
+  if(ev.target.closest?.('input,textarea,select,[contenteditable]')) return;
+  const text=ev.clipboardData?.getData('text/plain')||'';
+  if(/"entries"\s*:|^\s*\[|\S\s*=\s*\S/m.test(text)){
+    ev.preventDefault();
+    if(mode!=='decks'){ mode='decks'; saveUI(); renderTabs(); renderDecks(); }
+    importPasted(text).then(ok=>{ if(!ok) toast('Nội dung vừa dán không có dòng “từ = nghĩa” hay kết quả JSON nào.'); });
+  }
 });
 document.addEventListener('dragover',ev=>{ if([...(ev.dataTransfer?.items||[])].some(i=>i.kind==='file')){ ev.preventDefault(); document.body.classList.add('dragging'); } });
 document.addEventListener('dragleave',ev=>{ if(!ev.relatedTarget) document.body.classList.remove('dragging'); });
@@ -1292,19 +1316,8 @@ async function readImages(files){
      try{
       const imgs = fs;
       const data = await eng.json(IMG_PROMPT, {images:imgs, signal:imgCtl.signal});
-      const arr = Array.isArray(data) ? data : (Array.isArray(data?.entries) ? data.entries : []);
-      const str = v => String(v ?? '').trim();
-      const list = a => (Array.isArray(a) ? a : (a ? [a] : [])).map(str).filter(Boolean);
-      for(const x of arr){ const p=x?.pron; if(p && typeof p==='object' && !Array.isArray(p)) for(const [k,v] of Object.entries(p)){ const ip=str(v).replace(/^\/|\/$/g,''); if(ip) E.pron[norm(k)]=ip; } }
-      const entries = arr.map(x=>({w:str(x.word), syn:list(x.synonyms), ant:list(x.antonyms), notes:list(x.notes).map(n=>n.includes('=')?n:n+' ='), ipa:str(x.ipa).replace(/^\/|\/$/g,''), vi:str(x.vi).replace(/\|/g,'/'), pos:normPOS(x.pos)||guessPOS(str(x.word))})).filter(e=>e.w && e.syn.length);
-      if(!entries.length){ imgStatus={msg:'Không tìm thấy từ nào trong ảnh. Thử ảnh rõ hơn hoặc cắt sát phần từ vựng.',err:true,busy:false}; }
-      else {
-        E.text = (E.text.trim() ? E.text.trimEnd()+'\n' : '') + entries.map(toLine).join('\n');
-        if(!E.name.trim()) E.name = str(data?.title) || ('Bài ' + new Date().toLocaleDateString('vi-VN'));
-        imgCtl=null; imgStatus={msg:'',err:false,busy:false};
-        if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ từ ảnh và lưu thành bài “${E.name.trim()}”. Muốn sửa thì vào tab Bài học.`); return; }
-        imgStatus={msg:`Đã thêm ${entries.length} từ vào danh sách. Kiểm tra lại rồi bấm lưu.`,err:false,busy:false};
-      }
+      imgCtl=null;
+      if(await importStructured(data, 'ảnh')) return;
      }catch(e){
       if(eng.kind!=='gemini' || e?.code==='cancelled') throw e;
       useOCR=true; fbNote=` (Gemini chưa đọc được: ${GEMINI_ERR[e?.code]||'lỗi không rõ'} Đã dùng OCR miễn phí thay thế.)`;
@@ -1313,20 +1326,8 @@ async function readImages(files){
     }
     if(useOCR){
       const lines=await ocrImages(fs, pct=>setMsg(`Bước 1/2 · Đang đọc chữ trong ảnh… ${pct}%`+note));
-      const entries=parseText(lines).entries;
-      if(!entries.length){ imgStatus={msg:'Không tìm thấy dòng nào dạng “từ = nghĩa”. Thử ảnh rõ, thẳng và đủ sáng hơn.'+fbNote,err:true,busy:false}; }
-      else {
-        setMsg(`Bước 2/2 · Đã đọc ${entries.length} từ. Đang thêm nghĩa tiếng Việt và phiên âm…`);
-        const [nVi, si] = await Promise.all([freeVi(entries).catch(()=>0), freeIPA(entries).catch(()=>({})), freePOS(entries).catch(()=>0)]);
-        for(const e of entries) if(!e.pos) e.pos=guessPOS(e.w);
-        Object.assign(E.pron, si);
-        E.text=(E.text.trim()?E.text.trimEnd()+'\n':'')+entries.map(toLine).join('\n');
-        if(!E.name.trim()) E.name='Ảnh ' + (d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`)(new Date());
-        const viNote = nVi ? '' : ' Chưa lấy được nghĩa tiếng Việt (kiểm tra Internet), có thể bấm dịch lại ở tab Danh sách.';
-        imgCtl=null; imgStatus={msg:'',err:false,busy:false};
-        if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ và lưu thành bài “${E.name.trim()}”. Nếu OCR đọc sai chữ nào, sửa ở tab Bài học.`+viNote+fbNote); return; }
-        imgStatus={msg:`Đã đọc ${entries.length} từ. Kiểm tra lại chính tả rồi bấm lưu.`+viNote+fbNote,err:false,busy:false};
-      }
+      imgCtl=null;
+      if(await importLines(lines, {fbNote, setMsg, ocr:true})) return;
     }
   }catch(e){
     const map={cancelled:'Đã dừng đọc ảnh.', rate_limited:'Đang gửi quá nhiều yêu cầu. Thử lại sau ít phút.', image_rejected:'Ảnh không đọc được (sai định dạng hoặc quá lớn). Thử ảnh khác.', invalid_json:'Không tách được từ trong ảnh. Bấm chọn ảnh để thử lại.', empty_completion:'Không tách được từ trong ảnh. Thử ảnh rõ hơn.', session_expired:'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.',
@@ -1336,6 +1337,65 @@ async function readImages(files){
   }
   imgCtl=null;
   if(mode==='decks') renderDecks();
+}
+/* JSON from Claude, the Gemini API, or pasted from the Gemini app: {title, entries:[{word, synonyms, antonyms, notes, ipa, vi, pos, pron}]} */
+async function importStructured(data, from){
+  const arr = Array.isArray(data) ? data : (Array.isArray(data?.entries) ? data.entries : []);
+  const str = v => String(v ?? '').trim();
+  const list = a => (Array.isArray(a) ? a : (a ? [a] : [])).map(str).filter(Boolean);
+  const entries = arr.map(x=>({w:str(x?.word), syn:list(x?.synonyms), ant:list(x?.antonyms), notes:list(x?.notes).map(n=>n.includes('=')?n:n+' ='), ipa:str(x?.ipa).replace(/^\/|\/$/g,''), vi:str(x?.vi).replace(/\|/g,'/'), pos:normPOS(x?.pos)||guessPOS(str(x?.word))})).filter(e=>e.w && e.syn.length);
+  if(!entries.length){ imgStatus={msg:`Không tìm thấy từ nào trong ${from}. Thử lại với ảnh rõ hơn hoặc cắt sát phần từ vựng.`,err:true,busy:false}; return false; }
+  for(const x of arr){ const p=x?.pron; if(p && typeof p==='object' && !Array.isArray(p)) for(const [k,v] of Object.entries(p)){ const ip=str(v).replace(/^\/|\/$/g,''); if(ip) E.pron[norm(k)]=ip; } }
+  E.text = (E.text.trim() ? E.text.trimEnd()+'\n' : '') + entries.map(toLine).join('\n');
+  if(!E.name.trim()) E.name = str(data?.title) || ('Bài ' + new Date().toLocaleDateString('vi-VN'));
+  imgStatus={msg:'',err:false,busy:false};
+  if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ từ ${from} và lưu thành bài “${E.name.trim()}”. Muốn sửa thì vào tab Bài học.`); return true; }
+  imgStatus={msg:`Đã thêm ${entries.length} từ vào danh sách. Kiểm tra lại rồi bấm lưu.`,err:false,busy:false};
+  return false;
+}
+/* plain "word [pos] = syn, syn #ant /ipa/ | vi" lines (OCR or pasted): fill what is missing, then save */
+async function importLines(lines, {fbNote='', setMsg=null, ocr=false}={}){
+  const entries=parseText(lines).entries;
+  if(!entries.length){ imgStatus={msg:'Không tìm thấy dòng nào dạng “từ = nghĩa”. '+(ocr?'Thử ảnh rõ, thẳng và đủ sáng hơn.':'Kiểm tra lại nội dung đã dán.')+fbNote,err:true,busy:false}; return false; }
+  const missing=entries.some(e=>!e.vi||!e.pos||!e.ipa);
+  let nVi=entries.filter(e=>e.vi).length;
+  if(missing){
+    setMsg?.(`${ocr?'Bước 2/2 · ':''}Đã đọc ${entries.length} từ. Đang thêm nghĩa tiếng Việt và phiên âm…`);
+    const [v, si] = await Promise.all([freeVi(entries).catch(()=>0), freeIPA(entries).catch(()=>({})), freePOS(entries).catch(()=>0)]);
+    nVi+=v; Object.assign(E.pron, si);
+    for(const e of entries) if(!e.pos) e.pos=guessPOS(e.w);
+  }
+  E.text=(E.text.trim()?E.text.trimEnd()+'\n':'')+entries.map(toLine).join('\n');
+  if(!E.name.trim()) E.name=(ocr?'Ảnh ':'Bài ') + (d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`)(new Date());
+  const viNote = nVi ? '' : ' Chưa lấy được nghĩa tiếng Việt (kiểm tra Internet), có thể bấm dịch lại ở tab Danh sách.';
+  imgStatus={msg:'',err:false,busy:false};
+  if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ và lưu thành bài “${E.name.trim()}”.`+(ocr?' Nếu OCR đọc sai chữ nào, sửa ở tab Bài học.':'')+viNote+fbNote); return true; }
+  imgStatus={msg:`Đã đọc ${entries.length} từ. Kiểm tra lại rồi bấm lưu.`+viNote+fbNote,err:false,busy:false};
+  return false;
+}
+/* text pasted from the Gemini app (JSON block) or typed lines */
+async function importPasted(text){
+  text=String(text||'').trim(); if(!text) return false;
+  if(!E) newEditor(null);
+  let data=null; try{ data=parseLooseJSON(text); }catch{}
+  if(data && (Array.isArray(data) || Array.isArray(data.entries))){
+    const ok=await importStructured(data, 'kết quả Gemini');
+    if(!ok && mode==='decks') renderDecks();
+    return true;
+  }
+  if(parseText(text).entries.length){
+    imgStatus={msg:'Đang thêm nghĩa tiếng Việt và phiên âm…',err:false,busy:true}; if(mode==='decks') renderDecks();
+    const ok=await importLines(text, {setMsg:m=>{ imgStatus={msg:m,err:false,busy:true}; }});
+    if(!ok && mode==='decks') renderDecks();
+    return true;
+  }
+  return false;
+}
+const GEMINI_APP_PROMPT = IMG_PROMPT.replace('Reply with only a JSON object:', 'Reply with ONE JSON code block (```json ... ```) and nothing else. The JSON object is:') + `
+If several images are attached, put every entry from all images into one "entries" list.`;
+async function copyGeminiPrompt(btn){
+  try{ await navigator.clipboard.writeText(GEMINI_APP_PROMPT); btn.textContent='Đã sao chép ✓'; setTimeout(()=>{ btn.textContent='Sao chép câu lệnh'; },2200); }
+  catch{ const t=$('#gapprompt'); if(t){ t.hidden=false; t.focus(); t.select(); } toast('Chưa sao chép tự động được. Câu lệnh đã được chọn sẵn, bấm Ctrl+C.'); }
 }
 function openImages(fs){
   if(mode!=='decks'){ mode='decks'; delArmed=null; saveUI(); renderTabs(); }
@@ -1417,6 +1477,8 @@ const acts={
   vicancel:()=>{ viEditKey=null; renderList(); },
   backup:()=>exportBackup(),
   gemsave:()=>geminiSave(),
+  gappcopy:b=>copyGeminiPrompt(b),
+  gappimport:async()=>{ const t=$('#gapppaste')?.value||''; if(!t.trim()){ toast('Hãy dán kết quả từ Gemini vào ô trước.'); return; } const ok=await importPasted(t); if(!ok) toast('Không đọc được kết quả. Hãy sao chép cả khung code mà Gemini trả về.'); },
   gemclear:()=>{ settings.geminiKey=''; settings.geminiModel=''; saveSettings(); gemState={busy:false,msg:'Đã tắt Gemini. Ảnh sẽ được đọc bằng OCR miễn phí.',err:false,models:[]}; engKind='ocr'; renderDecks(); $('#gembox')?.setAttribute('open',''); },
   spick:b=>synPick(+b.dataset.i),
   scheck:()=>synCheck(),
