@@ -123,6 +123,14 @@ select{appearance:auto}
 .line.vi{border-top:1px dashed var(--line);padding-top:10px;align-items:center}
 .sym.vn{font-family:var(--f-body);font-size:.68rem;font-weight:700;letter-spacing:.04em;color:var(--paper);background:var(--ink);border-radius:4px;padding:3px 0;width:1.9em}
 .vitext{font-weight:500;font-size:1rem;min-width:0;overflow-wrap:anywhere}
+.exl{align-items:flex-start}
+.sym.vd{font-family:var(--f-body);font-size:.68rem;font-weight:700;letter-spacing:.04em;color:var(--moss-ink);background:var(--moss);border-radius:4px;padding:3px 0;width:1.9em;margin-top:2px}
+.exbox{display:flex;flex-direction:column;gap:3px;min-width:0;border-left:2px solid var(--moss-soft);padding-left:10px}
+.exen{font-family:var(--f-display);font-size:1.02rem;line-height:1.45;overflow-wrap:anywhere}
+.exen b{color:var(--moss);font-weight:700}
+.exvi{color:var(--muted);font-size:.92rem;line-height:1.45}
+.speak.sm{width:26px;height:26px;vertical-align:-6px;margin-left:4px}
+.speak.sm svg{width:13px;height:13px}
 .vitext.none{font-weight:400;font-style:italic;color:var(--muted)}
 .vibtn{margin-left:auto;flex:none;border:1px solid transparent;background:none;color:var(--muted);font-size:.82rem;font-weight:600;padding:3px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:5px}
 .vibtn:hover{color:var(--moss);border-color:var(--line);background:var(--card)}
@@ -363,8 +371,14 @@ function parseLine(raw){
   let w=line.slice(0,i).trim(), pos='';
   const pm=w.match(/\s*\[([^\]]*)\]\s*$/); if(pm){ pos=normPOS(pm[1]); w=w.slice(0,pm.index).trim(); }
   let rest=line.slice(i+1).trim(), ipa='', vi='';
+  let ex='', exVi='';
   const bar=rest.indexOf('|');
-  if(bar>=0){ vi=rest.slice(bar+1).trim(); rest=rest.slice(0,bar).trim(); }
+  if(bar>=0){
+    const segs=rest.slice(bar+1).split('|'); rest=rest.slice(0,bar).trim();
+    vi=segs[0].trim();
+    const exs=segs.slice(1).join('|').trim().replace(/^(ex|vd|ví dụ)\s*:\s*/i,'');
+    if(exs){ const k=exs.indexOf('//'); ex=(k>=0?exs.slice(0,k):exs).trim(); exVi=k>=0?exs.slice(k+2).trim():''; }
+  }
   const m=rest.match(/\s*[\/\[]([^\/\[\]]+)[\/\]]\s*$/);
   if(m){ ipa=m[1].trim(); rest=rest.slice(0,m.index).trim(); }
   const notes=[];
@@ -374,7 +388,7 @@ function parseLine(raw){
   const syn=/^(a|an|the)\s/i.test(head) && !head.includes('"') ? [head.replace(/\s+/g,' ')] : splitTop(head);
   const ant=parts.slice(1).flatMap(splitTop);
   if(!w || !syn.length) return {bad:true};
-  return {w, pos, ipa, syn, ant, notes, vi};
+  const out={w, pos, ipa, syn, ant, notes, vi}; if(ex){ out.ex=ex; out.exVi=exVi; } return out;
 }
 function parseText(text){
   const entries=[], bad=[];
@@ -382,7 +396,7 @@ function parseText(text){
   return {entries, bad};
 }
 const q = s => s.includes(',') ? `"${s}"` : s;
-const toLine = e => `${e.w}${e.pos?` [${e.pos}]`:''} = ${e.syn.map(q).join(', ')}${e.ant.length?' #'+e.ant.map(q).join(', '):''}${(e.notes||[]).map(n=>` (${n})`).join('')}${e.ipa?` /${e.ipa}/`:''}${e.vi?` | ${e.vi}`:''}`;
+const toLine = e => `${e.w}${e.pos?` [${e.pos}]`:''} = ${e.syn.map(q).join(', ')}${e.ant.length?' #'+e.ant.map(q).join(', '):''}${(e.notes||[]).map(n=>` (${n})`).join('')}${e.ipa?` /${e.ipa}/`:''}${e.vi||e.ex?` | ${e.vi||''}`:''}${e.ex?` | ex: ${e.ex}${e.exVi?` // ${e.exVi}`:''}`:''}`;
 const synText = (e,n=3) => e.syn.slice(0,n).join(', ');
 
 /* ---------- pronunciation of synonyms / antonyms ---------- */
@@ -505,6 +519,19 @@ function counts(d){ let m=0,l=0,n=0; for(const e of d.words){ const p=prog(d,e);
 function studyOrder(d){ return shuffle(d.words).sort((a,b)=>((prog(d,a)?.s ?? -1) - (prog(d,b)?.s ?? -1))); }
 
 /* ---------- shared bits ---------- */
+/* example sentence: the word being learned is bolded wherever it appears (any inflection) */
+function markWord(sentence, w){
+  const parts=String(w).toLowerCase().replace(/^(be|to)\s+/,'').split(/\s+/).filter(Boolean)
+    .map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/(e|y)$/,'')+'[\\wāēīōū\'’-]*');
+  if(!parts.length) return esc(sentence);
+  let re; try{ re=new RegExp('((?<!\\p{L})'+parts.join('\\s+')+')','giu'); }catch{ return esc(sentence); }
+  return String(sentence).split(re).map((t,i)=>i%2 ? `<b>${esc(t)}</b>` : esc(t)).join('');
+}
+function exampleBlock(e){
+  return `<div class="line exl"><span class="sym vd" title="ví dụ">VD</span><div class="exbox">
+    <div class="exen">${markWord(e.ex, e.w)}${canSpeak?` <button class="speak sm" type="button" data-act="speak" data-w="${esc(e.ex)}" aria-label="Nghe câu ví dụ">${SPEAK_SVG}</button>`:''}</div>
+    ${e.exVi?`<div class="exvi">${esc(e.exVi)}</div>`:''}</div></div>`;
+}
 function detail(e, {withWord=false, viEdit=null}={}){
   return `<div class="detail">
     ${withWord?`<div class="wordline" style="margin-top:0"><span class="bigword" style="font-size:1.6rem">${esc(e.w)}</span>${e.ipa?`<span class="ipa">/${esc(e.ipa)}/</span>`:''}${speakBtn(e.w)}${posBadge(e,'push')}</div>`:''}
@@ -512,6 +539,7 @@ function detail(e, {withWord=false, viEdit=null}={}){
     ${e.ant.length?`<div class="line"><span class="sym neq" title="trái nghĩa">#</span><div class="chips">${e.ant.map(s=>chip(e,s,'a')).join('')}</div></div>`:''}
     ${(e.notes||[]).length?`<div class="line"><span class="sym root" title="gốc từ">( )</span><span class="rootnote">${e.notes.map(esc).join(' · ')}</span></div>`:''}
     ${viEdit ? viEditor(e, viEdit) : e.vi?`<div class="line vi"><span class="sym vn" title="nghĩa tiếng Việt">VI</span><span class="vitext">${esc(e.vi)}</span></div>`:''}
+    ${e.ex?exampleBlock(e):''}
   </div>`;
 }
 function doneScreen(title, big, sub){
@@ -533,7 +561,7 @@ function renderStats(){
     <span><i class="dot" style="background:var(--moss)"></i>Đã thuộc <b>${c.m}</b></span>
     <span><i class="dot" style="background:var(--gold)"></i>Đang học <b>${c.l}</b></span>
     <span><i class="dot" style="background:var(--rule);border:1px solid var(--line)"></i>Chưa học <b>${c.n}</b></span>
-    <span class="legend"><span><code style="color:var(--moss)">=</code>đồng nghĩa</span><span><code style="color:var(--ant)">#</code>trái nghĩa</span><span><code style="color:var(--gold)">( )</code>gốc từ</span><span><code style="font-size:.75rem">VI</code>nghĩa tiếng Việt</span></span>
+    <span class="legend"><span><code style="color:var(--moss)">=</code>đồng nghĩa</span><span><code style="color:var(--ant)">#</code>trái nghĩa</span><span><code style="color:var(--gold)">( )</code>gốc từ</span><span><code style="font-size:.75rem">VI</code>nghĩa tiếng Việt</span><span><code style="font-size:.75rem;color:var(--moss)">VD</code>ví dụ</span></span>
   </div>`;
 }
 function renderTabs(){
@@ -812,6 +840,31 @@ function savePOS(k, v){
   renderList();
   $(`[data-act="posedit"][data-k="${CSS.escape(k)}"]`)?.focus({preventScroll:true});
 }
+let exState={busy:false,msg:'',err:false};
+async function fillEx(){
+  const d=cur(); if(exState.busy) return;
+  const owners=d.virtual?[...decks.values()]:[d];
+  const todo=owners.flatMap(o=>o.words.filter(e=>!e.ex).map(e=>({o,e}))).slice(0,80);
+  if(!todo.length) return;
+  exState={busy:true,err:false,msg:`Đang viết ví dụ cho ${todo.length} từ…`}; renderList();
+  let n=0;
+  const eng=(IS_LOCAL && !settings.geminiKey)?null:await getEngine();
+  if(eng?.json){
+    try{
+      const out=await eng.json(`For each English word below, write one short, natural example sentence (under 18 words) that uses the word with the meaning shown, and a Vietnamese translation of that sentence.
+Reply with only a JSON object mapping each word exactly as given to {"example": "...", "example_vi": "..."}.
+
+`+todo.map(({e})=>`${e.w} = ${e.syn.slice(0,3).join(', ')}${e.vi?` (${e.vi})`:''}`).join('\n'));
+      const m=new Map(Object.entries(out&&typeof out==='object'&&!Array.isArray(out)?out:{}).map(([k,v])=>[norm(k),v]));
+      for(const {e} of todo){ const v=m.get(norm(e.w)); const ex=String(v?.example||'').trim(); if(ex){ e.ex=ex.replace(/\|/g,'/'); e.exVi=String(v?.example_vi||'').trim().replace(/\|/g,'/'); n++; } }
+    }catch{}
+  } else {
+    n=await freeEx(todo.map(t=>t.e), 80).catch(()=>0);
+  }
+  owners.forEach(o=>scheduleSave(o)); invalidateAll();
+  exState={busy:false,err:!n,msg:n?`Đã thêm ví dụ cho ${n} từ.`:'Chưa tìm được ví dụ (cụm nhiều chữ hoặc mất mạng). Bật Gemini để viết ví dụ cho mọi từ.'};
+  if(mode==='list') renderList();
+}
 async function fillPOS(){
   const d=cur(); if(posState.busy) return;
   const owners=d.virtual?[...decks.values()]:[d];
@@ -866,16 +919,18 @@ function saveVi(k, value){
 function renderList(){
   const d=cur(), f=norm(listQ);
   const rows=d.words.filter(e=>!f || norm(e.w).includes(f) || e.syn.some(s=>norm(s).includes(f)) || e.ant.some(s=>norm(s).includes(f)) || norm(e.vi||'').includes(f));
-  const missVi=d.words.filter(e=>!e.vi).length, missP=missingPron(d).size, missPos=d.words.filter(e=>!e.pos).length;
+  const missVi=d.words.filter(e=>!e.vi).length, missP=missingPron(d).size, missPos=d.words.filter(e=>!e.pos).length, missEx=d.words.filter(e=>!e.ex).length;
   $('#stage').innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
     <div class="toolbar"><input class="input search" id="listq" type="search" placeholder="Tìm từ, nghĩa Anh hoặc Việt…" value="${esc(listQ)}">
       <span class="row-btns">${missVi?(trState.busy?`<button class="btn small" disabled>Đang dịch…</button>`:`<button class="btn small primary" data-act="translate">Dịch nghĩa tiếng Việt còn thiếu (${missVi})</button>`):''}
       ${missPos?(posState.busy?`<button class="btn small" disabled>Đang tìm từ loại…</button>`:`<button class="btn small primary" data-act="fillpos">Thêm từ loại còn thiếu (${missPos})</button>`):''}
+      ${missEx?(exState.busy?`<button class="btn small" disabled>Đang thêm ví dụ…</button>`:`<button class="btn small primary" data-act="fillex">Thêm ví dụ còn thiếu (${missEx})</button>`):''}
       ${missP?(prState.busy?`<button class="btn small" disabled>Đang thêm phiên âm…</button>`:`<button class="btn small primary" data-act="pron">Thêm phiên âm từ đồng nghĩa (${missP})</button>`):''}
       <button class="btn small ${resetArmed?'warn':''}" data-act="reset">${resetArmed?'Bấm lần nữa để đặt lại':(d.virtual?'Đặt lại tiến độ mọi bài':'Đặt lại tiến độ bài này')}</button></span></div>
     ${trState.msg?`<div class="status ${trState.err?'err':''}" role="status">${esc(trState.msg)}</div>`:''}
     ${prState.msg?`<div class="status ${prState.err?'err':''}" role="status">${esc(prState.msg)}</div>`:''}
     ${posState.msg?`<div class="status ${posState.err?'err':''}" role="status">${esc(posState.msg)}</div>`:''}
+    ${exState.msg?`<div class="status ${exState.err?'err':''}" role="status">${esc(exState.msg)}</div>`:''}
     <p class="muted" style="margin:0;font-size:.85rem">Bấm vào từ đồng nghĩa hoặc trái nghĩa để nghe đọc.</p>
     <div class="list">${rows.length?rows.map(e=>{ const p=prog(d,e), s=p?.s||0;
       const b=!p?.seen?'<span class="badge">Chưa học</span>':s>=4?'<span class="badge m">Đã thuộc</span>':'<span class="badge l">Đang học</span>';
@@ -1153,6 +1208,7 @@ Reply with only a JSON object: {"title": a short name for this page's topic (2-5
 "pron" gives the British IPA (no slashes) for every synonym and antonym of five words or fewer, keyed exactly as written in "synonyms"/"antonyms". Skip full-sentence definitions. Write it yourself even though it is not in the image.
 A definition stays as ONE synonym string even if it contains commas. Use [] or "" when a field is missing. Do not include the IPA slashes.
 "pos" is the part of speech of the headword with this meaning, one of: n, v, adj, adv, prep, conj, pron, interj, phr.
+"example" is one short, natural English sentence (under 18 words) that uses the headword with this meaning; "example_vi" is its Vietnamese translation.
 "vi" is a short Vietnamese meaning (under 8 words) for the sense shown by the synonyms. Write it yourself even though it is not in the image; if the page already has a Vietnamese meaning, use that.`;
 /* ---------- engines: Claude (in the viewer) · Claude API key (local app) · free OCR (local app, no key) ---------- */
 const IS_LOCAL = !window.claude;
@@ -1234,9 +1290,9 @@ const S_STR={type:'STRING'}, S_LIST={type:'ARRAY', items:{type:'STRING'}};
 const IMG_SCHEMA={type:'OBJECT', properties:{
   title:S_STR,
   entries:{type:'ARRAY', items:{type:'OBJECT', properties:{
-    word:S_STR, pos:S_STR, synonyms:S_LIST, antonyms:S_LIST, notes:S_LIST, ipa:S_STR, vi:S_STR,
+    word:S_STR, pos:S_STR, synonyms:S_LIST, antonyms:S_LIST, notes:S_LIST, ipa:S_STR, vi:S_STR, example:S_STR, example_vi:S_STR,
     pron:{type:'ARRAY', items:{type:'OBJECT', properties:{text:S_STR, ipa:S_STR}, required:['text','ipa']}}
-  }, required:['word','synonyms','vi','pos']}}
+  }, required:['word','synonyms','vi','pos','example','example_vi']}}
 }, required:['title','entries']};
 async function geminiJSON(prompt, opts={}){
   const parts=[];
@@ -1315,6 +1371,16 @@ async function freePOS(entries){
     if(p){ e.pos=p; n++; }
   }), 4);
   return n;
+}
+async function freeEx(entries, limit=60){
+  const got=[];
+  await runPool(entries.filter(e=>!e.ex && !/\s/.test(e.w)).slice(0,limit).map(e=>async()=>{
+    const j=await fetchJSON('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=ex&q='+encodeURIComponent(e.w), 7000);
+    const list=(j?.[13]?.[0]||[]).map(x=>String(x?.[0]||'').replace(/<[^>]+>/g,'').trim()).filter(t=>t && t.length<170);
+    if(list[0]){ let t=list[0]; t=t[0].toUpperCase()+t.slice(1); if(!/[.!?]$/.test(t)) t+='.'; e.ex=t; got.push(e); }
+  }), 4);
+  if(got.length){ const vi=await viGoogle(got.map(e=>e.ex)).catch(()=>[]); got.forEach((e,i)=>{ e.exVi=tidyVi(vi[i]||'') ? vi[i].trim() : ''; }); }
+  return got.length;
 }
 async function ipaFree(word){
   const j=await fetchJSON('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(word.toLowerCase()), 6000);
@@ -1423,8 +1489,10 @@ async function importStructured(data, from){
     if(!syn.length){ const d=str(pick(x,'definition','definition_en','explanation','gloss')); if(d) syn=[d]; }
     return {w, syn, ant:list(pick(x,'antonyms','antonym','Antonyms','opposites')), notes:list(pick(x,'notes','roots','root_notes','etymology')).map(n=>n.includes('=')?n:n+' ='),
       ipa:str(pick(x,'ipa','IPA','pronunciation','phonetic')).replace(/^[\/\[]|[\/\]]$/g,''), vi:str(pick(x,'vi','vietnamese','meaning_vi','nghia','translation')).replace(/\|/g,'/'),
-      pos:normPOS(pick(x,'pos','part_of_speech','partOfSpeech','type'))||guessPOS(w)};
+      pos:normPOS(pick(x,'pos','part_of_speech','partOfSpeech','type'))||guessPOS(w),
+      ex:str(pick(x,'example','ex','example_en','sentence')).replace(/\|/g,'/'), exVi:str(pick(x,'example_vi','exampleVi','example_translation','translation_example')).replace(/\|/g,'/')};
   }).filter(e=>e.w && e.syn.length);
+  for(const e of entries) if(!e.ex){ delete e.ex; delete e.exVi; }
   if(!entries.length){ imgStatus={msg:`Không tìm thấy từ nào trong ${from}. Thử lại với ảnh rõ hơn hoặc cắt sát phần từ vựng.`,err:true,busy:false}; return 'empty'; }
   for(const x of arr){
     const p=x?.pron;
@@ -1442,11 +1510,11 @@ async function importStructured(data, from){
 async function importLines(lines, {fbNote='', setMsg=null, ocr=false}={}){
   const entries=parseText(lines).entries;
   if(!entries.length){ imgStatus={msg:'Không tìm thấy dòng nào dạng “từ = nghĩa”. '+(ocr?'Thử ảnh rõ, thẳng và đủ sáng hơn.':'Kiểm tra lại nội dung đã dán.')+fbNote,err:true,busy:false}; return false; }
-  const missing=entries.some(e=>!e.vi||!e.pos||!e.ipa);
+  const missing=entries.some(e=>!e.vi||!e.pos||!e.ipa||!e.ex);
   let nVi=entries.filter(e=>e.vi).length;
   if(missing){
     setMsg?.(`${ocr?'Bước 2/2 · ':''}Đã đọc ${entries.length} từ. Đang thêm nghĩa tiếng Việt và phiên âm…`);
-    const [v, si] = await Promise.all([freeVi(entries).catch(()=>0), freeIPA(entries).catch(()=>({})), freePOS(entries).catch(()=>0)]);
+    const [v, si] = await Promise.all([freeVi(entries).catch(()=>0), freeIPA(entries).catch(()=>({})), freePOS(entries).catch(()=>0), freeEx(entries).catch(()=>0)]);
     nVi+=v; Object.assign(E.pron, si);
     for(const e of entries) if(!e.pos) e.pos=guessPOS(e.w);
   }
@@ -1563,6 +1631,7 @@ const acts={
   viedit:b=>openViEdit(b.dataset.k),
   posedit:b=>{ posEditKey=b.dataset.k; viEditKey=null; renderList(); },
   fillpos:()=>fillPOS(),
+  fillex:()=>fillEx(),
   vicancel:()=>{ viEditKey=null; renderList(); },
   backup:()=>exportBackup(),
   gemsave:()=>geminiSave(),
@@ -1645,11 +1714,27 @@ renderAll();
     try{
       const r=await fetch('decks.json',{cache:'no-cache'});
       if(r.ok){
-        const j=await r.json(); let seeded=[]; try{ seeded=JSON.parse(localStorage.getItem('sotu.seeded')||'[]'); }catch{}
+        const j=await r.json(); let seeded={};
+        try{ const raw=JSON.parse(localStorage.getItem('sotu.seeded')||'{}'); seeded=Array.isArray(raw)?Object.fromEntries(raw.map(id=>[id,1])):(raw||{}); }catch{}
         const storedIds=new Set(stored.map(x=>x?.id));
+        let updatedN=0;
         for(const sd of (j.decks||[])){
-          if(!sd?.id || !Array.isArray(sd.words) || seeded.includes(sd.id)) continue;
-          seeded.push(sd.id);
+          if(!sd?.id || !Array.isArray(sd.words)) continue;
+          const rev=sd.rev||j.rev||1;
+          if(seeded[sd.id]!=null){
+            if(rev>seeded[sd.id]){
+              const local=decks.get(sd.id);
+              if(local){
+                const src=new Map(sd.words.map(x=>[norm(x.w),x])); let ch=false;
+                for(const e of local.words){ const x=src.get(norm(e.w)); if(!x) continue;
+                  for(const f of ['ex','exVi','pos','vi','ipa']) if(!e[f] && x[f]){ e[f]=x[f]; ch=true; } }
+                if(ch){ updatedN++; await flush(sd.id); }
+              }
+              seeded[sd.id]=rev;
+            }
+            continue;
+          }
+          seeded[sd.id]=rev;
           if(storedIds.has(sd.id)){
             /* the untouched sample lesson in this browser gives way to the published version of it */
             const cur0=decks.get(sd.id);
@@ -1662,6 +1747,7 @@ renderAll();
           seededN++; await flush(sd.id);
         }
         try{ localStorage.setItem('sotu.seeded',JSON.stringify(seeded)); }catch{}
+        if(updatedN) setTimeout(()=>toast(`Đã cập nhật ví dụ và thông tin mới cho ${updatedN} bài có sẵn.`), 400);
       }
     }catch{}
   }
