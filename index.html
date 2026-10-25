@@ -1586,12 +1586,39 @@ renderAll();
     if(s.id===BUILTIN_ID && have){ const src=new Map(have.words.map(e=>[norm(e.w),e])); s.words=s.words.map(e=>{ const b=src.get(norm(e.w)); return b ? {...e, vi:e.vi||b.vi||'', pos:e.pos||b.pos||''} : e; }); }
     decks.set(s.id, {...s, progress:mergeProgress(s.progress, have?.progress), builtin:s.id===BUILTIN_ID, created:s.id===BUILTIN_ID?0:(s.created||1)});
   }
+  /* website: lessons published with the site (decks.json) are added once to this browser; local edits and deletions are respected */
+  let seededN=0;
+  if(IS_LOCAL && /^https?:$/.test(location.protocol)){
+    try{
+      const r=await fetch('decks.json',{cache:'no-cache'});
+      if(r.ok){
+        const j=await r.json(); let seeded=[]; try{ seeded=JSON.parse(localStorage.getItem('sotu.seeded')||'[]'); }catch{}
+        const storedIds=new Set(stored.map(x=>x?.id));
+        for(const sd of (j.decks||[])){
+          if(!sd?.id || !Array.isArray(sd.words) || seeded.includes(sd.id)) continue;
+          seeded.push(sd.id);
+          if(storedIds.has(sd.id)){
+            /* the untouched sample lesson in this browser gives way to the published version of it */
+            const cur0=decks.get(sd.id);
+            if(sd.id===BUILTIN_ID && cur0 && cur0.name==='Kākāpō (bài mẫu)' && sd.name!==cur0.name){
+              decks.set(sd.id,{...cur0, name:String(sd.name), words:sd.words, progress:mergeProgress(sd.progress||{}, cur0.progress)}); seededN++; await flush(sd.id);
+            }
+            continue;
+          }
+          decks.set(sd.id,{id:sd.id, name:String(sd.name||'Bài'), words:sd.words, progress:sd.progress||{}, created:sd.id===BUILTIN_ID?0:(sd.created||Date.now()), builtin:sd.id===BUILTIN_ID});
+          seededN++; await flush(sd.id);
+        }
+        try{ localStorage.setItem('sotu.seeded',JSON.stringify(seeded)); }catch{}
+      }
+    }catch{}
+  }
   if(window.SOTU_IPA_DATA) for(const d of decks.values()) for(const e of d.words) if(!e.ipa){ const o=ipaOffline(e.w); if(o) e.ipa=o; }
   invalidateAll();
+  if(seededN) toast(`Đã thêm ${seededN} bài có sẵn trên trang.`);
   try{ const s=JSON.parse(localStorage.getItem('sotu.ui')||'{}'); if(s.cur && decks.has(s.cur) && curId===BUILTIN_ID) curId=s.cur; }catch{}
   validCur();
   renderDeckSel(); renderStats();
-  if(stored.length){ resetSessions(); renderMode(); }
+  if(stored.length || seededN){ resetSessions(); renderMode(); }
   const eng = await getEngine().catch(()=>null);
   engKind = eng?.kind || null;
   imgOK = !!eng?.images;
