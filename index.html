@@ -538,15 +538,8 @@ function markWord(sentence, w){
   return String(sentence).split(re).map((t,i)=>i%2 ? `<b>${esc(t)}</b>` : esc(t)).join('');
 }
 /* ---------- pictures for concrete nouns, from Wikipedia / Wikimedia Commons ---------- */
-const ABSTRACT_N=/(tion|sion|ment|ness|ity|ism|ance|ence|ancy|ency|ship|hood|acy|ics|ing)$/i;
-const ABSTRACT_W=new Set(['population','management','optimism','mortality','predation','breeding','captivity','initiative','arrival','descent','incubation','colonisation','expedition','lifespan','home range','stakeholder','specialist','vegetarian']);
 const IMG_ON = () => IS_LOCAL && /^https?:$/.test(location.protocol);
-function wantsImage(e){
-  if(!IMG_ON() || e.pos!=='n' || e.img) return false;
-  if(e.imgQ) return true;                       // the AI said it can be photographed
-  const w=String(e.w).toLowerCase();
-  return !ABSTRACT_W.has(w) && !ABSTRACT_N.test(w.split(/[\s-]+/).pop());
-}
+function wantsImage(e){ return IMG_ON() && !e.img; }
 const imgQueue=new Map(); let imgBusy=0;
 function imgQuery(e){
   if(e.imgQ) return e.imgQ;
@@ -554,25 +547,45 @@ function imgQuery(e){
   if(syn) return `${e.w} ${syn}`;
   return `${e.w} ${String(e.syn[0]||'').replace(/^(a|an|the)\s+/i,'').split(/\s+/).slice(0,5).join(' ')}`;
 }
-async function lookupImage(q, skip=0){
-  const url='https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=8&prop=pageimages|info&inprop=url&piprop=thumbnail&pithumbsize=480&gsrsearch='+encodeURIComponent(q);
-  const j=await fetchJSON(url, 9000);
-  const pages=Object.values(j?.query?.pages||{}).sort((a,b)=>(a.index||0)-(b.index||0))
-    .filter(p=>p.thumbnail?.source && !/\.svg/i.test(p.thumbnail.source) && !/(disambiguation|^list of)/i.test(p.title||''));
-  if(!pages.length) return null;
-  const p=pages[skip % pages.length];
-  return {src:p.thumbnail.source, page:p.fullurl||('https://en.wikipedia.org/wiki/'+encodeURIComponent(p.title)), title:p.title, n:skip, of:pages.length};
+const imgCache=new Map();
+async function wikiImages(q){
+  const j=await fetchJSON('https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=8&prop=pageimages|info&inprop=url&piprop=thumbnail&pithumbsize=480&gsrsearch='+encodeURIComponent(q), 9000);
+  return Object.values(j?.query?.pages||{}).sort((a,b)=>(a.index||0)-(b.index||0))
+    .filter(p=>p.thumbnail?.source && !/\.svg/i.test(p.thumbnail.source) && !/(disambiguation|^list of)/i.test(p.title||''))
+    .map(p=>({src:p.thumbnail.source, page:p.fullurl||('https://en.wikipedia.org/wiki/'+encodeURIComponent(p.title)), title:p.title, from:'Wikipedia'}));
+}
+async function commonsImages(q){
+  const j=await fetchJSON('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=12&prop=imageinfo&iiprop=url|mime&iiurlwidth=480&gsrsearch='+encodeURIComponent(q+' filetype:bitmap'), 9000);
+  return Object.values(j?.query?.pages||{}).sort((a,b)=>(a.index||0)-(b.index||0))
+    .filter(p=>{ const ii=p.imageinfo?.[0]; return ii?.thumburl && /image\/(jpeg|png|webp)/.test(ii.mime||'') && !/\b(maps?|logo|diagram|chart|flag|coat of arms|icon|graph|signature|plan of|scan|page \d+)\b/i.test(p.title||''); })
+    .map(p=>({src:p.imageinfo[0].thumburl, page:p.imageinfo[0].descriptionurl||('https://commons.wikimedia.org/wiki/'+encodeURIComponent(p.title)), title:String(p.title).replace(/^File:/,'').replace(/\.[a-z]+$/i,''), from:'Wikimedia Commons'}));
+}
+/* nouns: an encyclopedia article usually has the right picture; other words: photos described with the idea work better */
+async function lookupImage(q, skip=0, pos=''){
+  const key=pos+'|'+q;
+  let list=imgCache.get(key);
+  if(!list){
+    const order = pos==='n' ? [wikiImages, commonsImages] : [commonsImages, wikiImages];
+    let first=[]; try{ first=await order[0](q); }catch(e){ first=null; }
+    let second=[]; if(!first || first.length<3){ try{ second=await order[1](q); }catch{ second=[]; } }
+    if(first===null && !second.length) throw {code:'network'};
+    const seen=new Set(); list=[...(first||[]), ...second].filter(x=>!seen.has(x.src) && seen.add(x.src));
+    imgCache.set(key, list);
+  }
+  if(!list.length) return null;
+  const p=list[skip % list.length];
+  return {...p, n:skip, of:list.length};
 }
 /* every saved copy of this word (it can sit in several lessons) gets the same picture */
 function setImage(w, img){
   const k=norm(w), touched=new Set();
-  for(const d of decks.values()) for(const e of d.words) if(norm(e.w)===k && e.pos==='n'){ e.img=img; touched.add(d); }
+  for(const d of decks.values()) for(const e of d.words) if(norm(e.w)===k){ e.img=img; touched.add(d); }
   touched.forEach(d=>flush(d.id)); invalidateAll();
-  document.querySelectorAll(`[data-imgw="${CSS.escape(k)}"]`).forEach(el=>{ const tmp=document.createElement('div'); tmp.innerHTML=imageBlock({w, pos:'n', img}, el.dataset.ctl==='1'); el.replaceWith(tmp.firstElementChild||document.createTextNode('')); });
+  document.querySelectorAll(`[data-imgw="${CSS.escape(k)}"]`).forEach(el=>{ const tmp=document.createElement('div'); tmp.innerHTML=imageBlock({w, img}, el.dataset.ctl==='1'); el.replaceWith(tmp.firstElementChild||document.createTextNode('')); });
 }
 function queueImage(e){
   const k=norm(e.w); if(imgQueue.has(k)) return;
-  imgQueue.set(k, {w:e.w, q:imgQuery(e), skip:0});
+  imgQueue.set(k, {w:e.w, q:imgQuery(e), pos:e.pos||'', skip:0});
   setTimeout(pumpImages, 0);
 }
 async function pumpImages(){
@@ -580,14 +593,14 @@ async function pumpImages(){
     const next=[...imgQueue.entries()].find(([,v])=>!v.started); if(!next) return;
     const [k,v]=next; v.started=true; imgBusy++;
     (async()=>{
-      let img=null; try{ img=await lookupImage(v.q, v.skip); }catch{ img=undefined; }
+      let img=null; try{ img=await lookupImage(v.q, v.skip, v.pos); }catch{ img=undefined; }
       if(img===undefined){ imgQueue.delete(k); imgBusy--; pumpImages(); return; }   // offline: try again another time
       setImage(v.w, img || 'none'); imgQueue.delete(k); imgBusy--; pumpImages();
     })();
   }
 }
 function imageBlock(e, controls){
-  if(!IMG_ON() || e.pos!=='n') return '';
+  if(!IMG_ON()) return '';
   const k=norm(e.w), ctl=controls?'1':'0';
   if(!e.img){
     if(wantsImage(e)){ queueImage(e); return `<div class="wimg loading" data-imgw="${esc(k)}" data-ctl="${ctl}"><span>Đang tìm ảnh…</span></div>`; }
@@ -596,13 +609,13 @@ function imageBlock(e, controls){
   if(e.img==='none') return controls ? `<div class="wimgnone" data-imgw="${esc(k)}" data-ctl="${ctl}"><button type="button" class="wbtn" data-act="imgfind" data-w="${esc(e.w)}">+ Tìm ảnh minh hoạ</button></div>` : '';
   const im=e.img;
   return `<figure class="wimg" data-imgw="${esc(k)}" data-ctl="${ctl}"><img src="${esc(im.src)}" alt="Ảnh minh hoạ: ${esc(e.w)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('figure').classList.add('broken')">
-    <figcaption>Ảnh: <a href="${esc(im.page)}" target="_blank" rel="noopener">Wikipedia · ${esc(im.title)}</a>${controls?` · <button type="button" class="wbtn" data-act="imgnext" data-w="${esc(e.w)}" data-n="${(im.n||0)+1}">Ảnh khác</button> · <button type="button" class="wbtn" data-act="imghide" data-w="${esc(e.w)}">Ẩn ảnh</button>`:''}</figcaption></figure>`;
+    <figcaption>Ảnh: <a href="${esc(im.page)}" target="_blank" rel="noopener">${esc(im.from||'Wikipedia')} · ${esc(im.title)}</a>${controls?` · <button type="button" class="wbtn" data-act="imgnext" data-w="${esc(e.w)}" data-n="${(im.n||0)+1}">Ảnh khác</button> · <button type="button" class="wbtn" data-act="imghide" data-w="${esc(e.w)}">Ẩn ảnh</button>`:''}</figcaption></figure>`;
 }
 async function imageAction(kind, w, n=0){
   const e=[...decks.values()].flatMap(d=>d.words).find(x=>norm(x.w)===norm(w)); if(!e) return;
   if(kind==='hide'){ setImage(w,'none'); toast(`Đã ẩn ảnh của “${w}”.`); return; }
   const el=document.querySelector(`[data-imgw="${CSS.escape(norm(w))}"]`); if(el) el.classList.add('busy');
-  let img=null; try{ img=await lookupImage(imgQuery(e), n); }catch{ toast('Chưa tìm được ảnh, kiểm tra kết nối Internet.'); if(el) el.classList.remove('busy'); return; }
+  let img=null; try{ img=await lookupImage(imgQuery(e), n, e.pos||''); }catch{ toast('Chưa tìm được ảnh, kiểm tra kết nối Internet.'); if(el) el.classList.remove('busy'); return; }
   if(!img){ toast(`Không tìm thấy ảnh phù hợp cho “${w}”.`); setImage(w,'none'); return; }
   setImage(w, img);
 }
@@ -1288,7 +1301,7 @@ Reply with only a JSON object: {"title": a short name for this page's topic (2-5
 "pron" gives the British IPA (no slashes) for every synonym and antonym of five words or fewer, keyed exactly as written in "synonyms"/"antonyms". Skip full-sentence definitions. Write it yourself even though it is not in the image.
 A definition stays as ONE synonym string even if it contains commas. Use [] or "" when a field is missing. Do not include the IPA slashes.
 "pos" is the part of speech of the headword with this meaning, one of: n, v, adj, adv, prep, conj, pron, interj, phr.
-"image_query" is, only when the headword is a concrete noun that can be photographed, a 1-4 word English Wikipedia search phrase for it (e.g. "tree bark" for bark, "Kākāpō"); otherwise "".
+"image_query" is a 1-4 word English search phrase for a photo that shows this word's meaning, for every word (e.g. bark -> "tree bark", leap -> "animal jumping", nocturnal -> "owl at night", cautious -> "caution sign").
 "example" is one short, natural English sentence (under 18 words) that uses the headword with this meaning; "example_vi" is its Vietnamese translation.
 "vi" is a short Vietnamese meaning (under 8 words) for the sense shown by the synonyms. Write it yourself even though it is not in the image; if the page already has a Vietnamese meaning, use that.`;
 /* ---------- engines: Claude (in the viewer) · Claude API key (local app) · free OCR (local app, no key) ---------- */
@@ -1813,7 +1826,8 @@ renderAll();
               if(local){
                 const src=new Map(sd.words.map(x=>[norm(x.w),x])); let ch=false;
                 for(const e of local.words){ const x=src.get(norm(e.w)); if(!x) continue;
-                  for(const f of ['ex','exVi','pos','vi','ipa']) if(!e[f] && x[f]){ e[f]=x[f]; ch=true; } }
+                  for(const f of ['ex','exVi','pos','vi','ipa','imgQ']) if(!e[f] && x[f]){ e[f]=x[f]; ch=true; }
+                  if(x.imgQ && e.img==='none'){ delete e.img; ch=true; } }
                 if(ch){ updatedN++; await flush(sd.id); }
               }
               seeded[sd.id]=rev;
