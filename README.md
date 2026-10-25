@@ -11,7 +11,7 @@
 ## Cách sử dụng
 
 ### Bước 1 · Chuẩn bị sách
-Bạn cần cuốn **Boost Your Vocabulary – Cambridge IELTS**. Mỗi unit trong sách có **cột từ vựng ở bên trái** trang, ghi theo dạng:
+Bạn cần cuốn **Boost Your Vocabulary – Cambridge IELTS**. Mỗi bài đọc trong sách có **cột từ vựng ở bên phải** (bên trái là bài đọc, các từ quan trọng được in đậm), ghi theo dạng:
 
 ```
 từ gốc = từ đồng nghĩa, từ đồng nghĩa #từ trái nghĩa (gốc từ = nghĩa) phiên âm
@@ -20,12 +20,12 @@ từ gốc = từ đồng nghĩa, từ đồng nghĩa #từ trái nghĩa (gốc 
 Ví dụ: `reintroduce = bring back, restore, reinstate #eradicate (re- = again)`
 
 ### Bước 2 · Chụp và cắt ảnh cột từ vựng
-Chụp trang sách (hoặc chụp màn hình bản PDF), rồi **chỉ cắt lấy phần cột từ vựng bên trái**.
+Chụp trang sách (hoặc chụp màn hình bản PDF), rồi **chỉ cắt lấy phần cột từ vựng bên phải**.
 
-![Cắt lấy cột từ vựng bên trái, bỏ phần bài đọc và bài tập bên phải](docs/cach-cat-anh.svg)
+![Cắt lấy cột từ vựng bên phải, bỏ ảnh tiêu đề và bài đọc bên trái](docs/cach-cat-anh.svg)
 
 Mẹo để ứng dụng đọc đúng:
-- Chỉ lấy cột từ vựng, **bỏ phần bài đọc, bài tập, hình minh hoạ**.
+- Chỉ lấy cột từ vựng, **bỏ ảnh tiêu đề và đoạn bài đọc bên trái**.
 - Ảnh **thẳng, đủ sáng, chữ rõ**. Có thể cắt một cột dài thành 2–3 ảnh.
 - Giữ cả dòng phiên âm và phần ghi chú gốc từ trong ngoặc.
 - Trên Windows: `Win + Shift + S` để chụp nhanh đúng vùng cần cắt.

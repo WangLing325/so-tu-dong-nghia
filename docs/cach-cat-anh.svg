@@ -1,50 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 470" width="760" height="470" font-family="Segoe UI, Roboto, Arial, sans-serif">
-  <rect width="760" height="470" fill="#F2F5EF"/>
-  <!-- book page -->
-  <rect x="40" y="30" width="460" height="410" rx="10" fill="#FFFFFF" stroke="#D5DDD0" stroke-width="2"/>
-  <text x="270" y="60" text-anchor="middle" font-size="15" fill="#58665C">Một trang sách Boost Your Vocabulary</text>
-  <!-- left vocabulary column (to crop) -->
-  <rect x="62" y="80" width="190" height="340" rx="6" fill="#E2EDD4" stroke="#3B6A1D" stroke-width="3" stroke-dasharray="10 6"/>
-  <g fill="#3B6A1D">
-    <rect x="76" y="98" width="70" height="9" rx="3"/><rect x="152" y="98" width="86" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="114" width="150" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="138" width="60" height="9" rx="3"/><rect x="142" y="138" width="96" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="154" width="140" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="178" width="84" height="9" rx="3"/><rect x="166" y="178" width="72" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="194" width="120" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="218" width="54" height="9" rx="3"/><rect x="136" y="218" width="102" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="234" width="150" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="258" width="76" height="9" rx="3"/><rect x="158" y="258" width="80" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="274" width="110" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="298" width="66" height="9" rx="3"/><rect x="148" y="298" width="90" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="314" width="140" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="338" width="88" height="9" rx="3"/><rect x="170" y="338" width="68" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="354" width="130" height="7" rx="3" opacity=".35"/>
-    <rect x="76" y="378" width="58" height="9" rx="3"/><rect x="140" y="378" width="98" height="9" rx="3" opacity=".45"/>
-    <rect x="76" y="394" width="120" height="7" rx="3" opacity=".35"/>
-  </g>
-  <!-- right column (skip) -->
-  <g fill="#C9D1C5">
-    <rect x="272" y="84" width="208" height="8" rx="3"/><rect x="272" y="100" width="190" height="8" rx="3"/><rect x="272" y="116" width="200" height="8" rx="3"/>
-    <rect x="272" y="132" width="170" height="8" rx="3"/><rect x="272" y="156" width="208" height="8" rx="3"/><rect x="272" y="172" width="196" height="8" rx="3"/>
-    <rect x="272" y="188" width="180" height="8" rx="3"/><rect x="272" y="212" width="208" height="8" rx="3"/><rect x="272" y="228" width="160" height="8" rx="3"/>
-    <rect x="272" y="252" width="200" height="8" rx="3"/><rect x="272" y="268" width="186" height="8" rx="3"/><rect x="272" y="292" width="208" height="8" rx="3"/>
-    <rect x="272" y="308" width="150" height="8" rx="3"/><rect x="272" y="332" width="200" height="8" rx="3"/><rect x="272" y="348" width="176" height="8" rx="3"/>
-    <rect x="272" y="372" width="208" height="8" rx="3"/><rect x="272" y="388" width="140" height="8" rx="3"/>
-  </g>
-  <line x1="262" y1="80" x2="262" y2="420" stroke="#E8EDE4" stroke-width="2"/>
-  <!-- labels -->
-  <path d="M252 250 C 300 250, 330 250, 520 150" fill="none" stroke="#3B6A1D" stroke-width="2.5" marker-end="url(#a)"/>
-  <path d="M480 300 C 500 320, 510 330, 520 330" fill="none" stroke="#A6372F" stroke-width="2" marker-end="url(#b)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520" width="760" height="520" font-family="Segoe UI, Roboto, Arial, sans-serif">
+  <rect width="760" height="520" fill="#F2F5EF"/>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#3B6A1D"/></marker>
     <marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#A6372F"/></marker>
   </defs>
-  <rect x="525" y="110" width="215" height="92" rx="10" fill="#3B6A1D"/>
-  <text x="540" y="138" font-size="17" font-weight="700" fill="#FFFFFF">✓ Cắt phần này</text>
-  <text x="540" y="161" font-size="13.5" fill="#E2EDD4">Cột từ vựng bên trái:</text>
-  <text x="540" y="180" font-size="13.5" fill="#E2EDD4">từ = đồng nghĩa #trái nghĩa</text>
-  <rect x="525" y="300" width="215" height="70" rx="10" fill="#F6E0DC"/>
-  <text x="540" y="328" font-size="17" font-weight="700" fill="#A6372F">✗ Bỏ qua</text>
-  <text x="540" y="350" font-size="13.5" fill="#A6372F">Bài đọc, bài tập bên phải</text>
+  <text x="355" y="26" text-anchor="middle" font-size="14" fill="#58665C">Một trang sách Boost Your Vocabulary</text>
+  <rect x="150" y="36" width="410" height="464" rx="10" fill="#FFFFFF" stroke="#D5DDD0" stroke-width="2"/>
+  <!-- title photo banner -->
+  <rect x="150" y="36" width="410" height="70" rx="10" fill="#8FA88A"/>
+  <rect x="150" y="80" width="410" height="26" fill="#8FA88A"/>
+  <text x="355" y="80" text-anchor="middle" font-size="26" font-weight="700" fill="#FFFFFF" font-family="Georgia, serif">Tiêu đề bài đọc</text>
+  <!-- table -->
+  <rect x="160" y="116" width="390" height="374" fill="none" stroke="#B8C2B4" stroke-width="1.5"/>
+  <line x1="384" y1="116" x2="384" y2="490" stroke="#B8C2B4" stroke-width="1.5"/>
+  <rect x="172" y="150" width="185" height="7" rx="3" fill="#C9D1C5"/><rect x="274" y="150" width="40" height="7" rx="3" fill="#8D978F"/><rect x="172" y="167" width="200" height="7" rx="3" fill="#C9D1C5"/><rect x="199" y="167" width="28" height="7" rx="3" fill="#8D978F"/><rect x="172" y="184" width="195" height="7" rx="3" fill="#C9D1C5"/><rect x="256" y="184" width="29" height="7" rx="3" fill="#8D978F"/><rect x="172" y="201" width="184" height="7" rx="3" fill="#C9D1C5"/><rect x="228" y="201" width="36" height="7" rx="3" fill="#8D978F"/><rect x="172" y="218" width="139" height="7" rx="3" fill="#C9D1C5"/><rect x="195" y="218" width="36" height="7" rx="3" fill="#8D978F"/><rect x="172" y="251" width="183" height="7" rx="3" fill="#C9D1C5"/><rect x="172" y="268" width="171" height="7" rx="3" fill="#C9D1C5"/><rect x="172" y="285" width="186" height="7" rx="3" fill="#C9D1C5"/><rect x="172" y="302" width="182" height="7" rx="3" fill="#C9D1C5"/><rect x="219" y="302" width="39" height="7" rx="3" fill="#8D978F"/><rect x="172" y="319" width="175" height="7" rx="3" fill="#C9D1C5"/><rect x="172" y="336" width="191" height="7" rx="3" fill="#C9D1C5"/><rect x="172" y="353" width="202" height="7" rx="3" fill="#C9D1C5"/><rect x="245" y="353" width="43" height="7" rx="3" fill="#8D978F"/><rect x="172" y="370" width="187" height="7" rx="3" fill="#C9D1C5"/><rect x="258" y="370" width="28" height="7" rx="3" fill="#8D978F"/><rect x="172" y="387" width="148" height="7" rx="3" fill="#C9D1C5"/><rect x="221" y="387" width="44" height="7" rx="3" fill="#8D978F"/>
+  <!-- vocabulary column to crop -->
+  <rect x="388" y="120" width="158" height="366" rx="5" fill="#E2EDD4" stroke="#3B6A1D" stroke-width="3" stroke-dasharray="10 6"/>
+  <rect x="396" y="128" width="46" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="128" width="73" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="139" width="107" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="150" width="59" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="150" width="69" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="161" width="107" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="172" width="54" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="172" width="65" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="183" width="94" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="194" width="49" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="194" width="68" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="205" width="132" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="216" width="41" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="216" width="62" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="227" width="82" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="238" width="54" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="238" width="68" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="249" width="113" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="272" width="57" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="272" width="75" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="283" width="124" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="294" width="50" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="294" width="64" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="305" width="123" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="316" width="46" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="316" width="62" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="327" width="106" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="338" width="46" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="338" width="74" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="349" width="97" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="360" width="45" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="360" width="71" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="371" width="107" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="382" width="58" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="382" width="70" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="393" width="120" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="404" width="57" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="404" width="66" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="415" width="100" height="5" rx="2" fill="#3B6A1D" opacity=".3"/><rect x="396" y="426" width="43" height="7" rx="3" fill="#3B6A1D"/><rect x="462" y="426" width="61" height="7" rx="3" fill="#3B6A1D" opacity=".45"/><rect x="396" y="437" width="125" height="5" rx="2" fill="#3B6A1D" opacity=".3"/>
+  <!-- labels -->
+  <path d="M548 300 C 565 300, 570 270, 585 250" fill="none" stroke="#3B6A1D" stroke-width="2.5" marker-end="url(#a)"/>
+  <rect x="588" y="186" width="164" height="112" rx="10" fill="#3B6A1D"/>
+  <text x="602" y="213" font-size="17" font-weight="700" fill="#FFFFFF">✓ Cắt phần này</text>
+  <text x="602" y="236" font-size="13.5" fill="#E2EDD4">Cột từ vựng</text>
+  <text x="602" y="255" font-size="13.5" fill="#E2EDD4">bên phải</text>
+  <text x="602" y="272" font-size="12.5" fill="#E2EDD4" font-family="Consolas, monospace">từ = đồng nghĩa</text>
+  <text x="602" y="288" font-size="12.5" fill="#E2EDD4" font-family="Consolas, monospace">#trái nghĩa</text>
+  <path d="M178 300 C 165 300, 155 300, 147 300" fill="none" stroke="#A6372F" stroke-width="2" marker-end="url(#b)"/>
+  <path d="M190 70 C 160 70, 150 200, 146 250" fill="none" stroke="#A6372F" stroke-width="2" marker-end="url(#b)"/>
+  <rect x="8" y="252" width="136" height="88" rx="10" fill="#F6E0DC"/>
+  <text x="20" y="279" font-size="17" font-weight="700" fill="#A6372F">✗ Bỏ qua</text>
+  <text x="20" y="301" font-size="13.5" fill="#A6372F">Ảnh tiêu đề và</text>
+  <text x="20" y="320" font-size="13.5" fill="#A6372F">bài đọc bên trái</text>
 </svg>
