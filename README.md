@@ -50,14 +50,9 @@ Sau khi đọc ảnh, ứng dụng **tự động**:
 2. **dịch nghĩa tiếng Việt** và xác định **từ loại** (danh từ, động từ, tính từ…),
 3. thêm **phiên âm** cho từ gốc và từng từ đồng nghĩa,
 4. thêm **câu ví dụ tiếng Anh kèm câu dịch**,
-5. thêm **ảnh minh hoạ cho danh từ** (lấy từ Wikipedia),
-6. **lưu thành một bài mới** và mở thẻ ghi nhớ để học ngay.
+5. **lưu thành một bài mới** và mở thẻ ghi nhớ để học ngay.
 
 Thường mất 10–60 giây. Nếu có chữ đọc sai, sửa ở tab **Bài học → Sửa**. Nghĩa tiếng Việt và từ loại sửa trực tiếp được trong tab **Danh sách**.
-
-**Ảnh minh hoạ** (trong tab Danh sách, dưới câu ví dụ):
-- Danh từ tự có ảnh. Ảnh chưa đúng thì bấm **Ảnh khác** hoặc **Ẩn ảnh**.
-- Với mọi từ (động từ, tính từ…), bấm **+ Thêm ảnh của bạn** để chọn ảnh từ máy, hoặc **kéo thả ảnh** vào ô đó. Ảnh được thu nhỏ và lưu trong trình duyệt; có **Đổi ảnh / Xoá ảnh**. Ảnh của bạn cũng được đưa vào tệp *Sao lưu*.
 
 ### Bước 5 · Học từ mới theo danh sách chủ đề
 Mỗi lần đưa ảnh vào là một **bài**. Nên đặt tên bài theo unit hoặc chủ đề trong sách (ví dụ *Unit 3 – The environment*) để học theo từng chủ đề. Chọn bài ở ô **Bài đang học**, hoặc chọn **★ Tất cả từ đã lưu** để ôn trộn mọi chủ đề.
@@ -128,6 +123,5 @@ Sau khi cài, ứng dụng có biểu tượng riêng và vẫn học được k
 - Phiên âm: CMU Pronouncing Dictionary (Carnegie Mellon University), chuyển sang IPA; gói `cmu-pronouncing-dictionary` (ISC), xem `ipa-dict-LICENSE.txt`.
 - Đọc chữ: tesseract.js (Apache-2.0), tải từ jsDelivr khi dùng.
 - Dịch: Google Dịch / MyMemory (dịch vụ miễn phí bên ngoài); Gemini API (tuỳ chọn, khóa của người dùng).
-- Ảnh minh hoạ cho danh từ: Wikipedia / Wikimedia Commons, hiển thị kèm link tới trang nguồn (giấy phép theo từng ảnh).
 
 *Ứng dụng không chứa nội dung của sách Boost Your Vocabulary – Cambridge IELTS; bạn cần có sách để tự đưa từ vựng vào.*
