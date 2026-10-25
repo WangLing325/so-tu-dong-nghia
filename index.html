@@ -313,7 +313,7 @@ const SPEAK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const canSpeak = 'speechSynthesis' in window;
 function speak(t){ try{ const u=new SpeechSynthesisUtterance(t); u.lang='en-US'; u.rate=.9; speechSynthesis.cancel(); speechSynthesis.speak(u); }catch{} }
 const speakBtn = w => canSpeak ? `<button class="speak" data-act="speak" data-w="${esc(w)}" aria-label="Nghe phát âm ${esc(w)}" title="Nghe phát âm">${SPEAK_SVG}</button>` : '';
-let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), Math.min(14000, 2600+String(msg).length*45)); }
 
 /* ---------- part of speech ---------- */
 const POS={n:['n','danh từ'], v:['v','động từ'], adj:['adj','tính từ'], adv:['adv','trạng từ'], prep:['prep','giới từ'], conj:['conj','liên từ'], pron:['pron','đại từ'], interj:['interj','thán từ'], phr:['phr','cụm từ']};
@@ -1159,7 +1159,7 @@ async function apiJSON(prompt, opts={}){
 }
 /* ---------- Gemini (the person's own free API key from Google AI Studio; kept only in this browser) ---------- */
 const GEMINI_BASE='https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_ERR={bad_key:'khóa API không đúng hoặc đã bị xoá.', quota:'đã hết lượt miễn phí hôm nay hoặc gửi quá nhanh.', bad_model:'mô hình không còn dùng được, hãy bấm Kiểm tra khóa lại.', network:'không kết nối được Internet.', overloaded:'máy chủ Gemini đang quá tải.', api_error:'Gemini báo lỗi.', invalid_json:'Gemini trả về kết quả không đọc được.', blocked:'Gemini từ chối ảnh này.'};
+const GEMINI_ERR={no_entries:'không tách được từ nào trong câu trả lời.', bad_key:'khóa API không đúng hoặc đã bị xoá.', quota:'đã hết lượt miễn phí hôm nay hoặc gửi quá nhanh.', bad_model:'mô hình không còn dùng được, hãy bấm Kiểm tra khóa lại.', network:'không kết nối được Internet.', overloaded:'máy chủ Gemini đang quá tải.', api_error:'Gemini báo lỗi.', invalid_json:'Gemini trả về kết quả không đọc được.', blocked:'Gemini từ chối ảnh này.'};
 async function geminiFetch(path, init={}){
   let r;
   try{ r=await fetch(GEMINI_BASE+path,{...init, headers:{'content-type':'application/json','x-goog-api-key':settings.geminiKey.trim(), ...(init.headers||{})}}); }
@@ -1182,15 +1182,27 @@ function geminiPick(names){
   const score=n=>(/flash-lite/.test(n)?3:/flash/.test(n)?2:/pro/.test(n)?0:1)*1000 + (/(preview|exp|latest)/.test(n)?0:200) + ver(n)*10;
   return [...names].sort((a,b)=>score(b)-score(a))[0]||'';
 }
+let lastAIRaw='';
+const S_STR={type:'STRING'}, S_LIST={type:'ARRAY', items:{type:'STRING'}};
+const IMG_SCHEMA={type:'OBJECT', properties:{
+  title:S_STR,
+  entries:{type:'ARRAY', items:{type:'OBJECT', properties:{
+    word:S_STR, pos:S_STR, synonyms:S_LIST, antonyms:S_LIST, notes:S_LIST, ipa:S_STR, vi:S_STR,
+    pron:{type:'ARRAY', items:{type:'OBJECT', properties:{text:S_STR, ipa:S_STR}, required:['text','ipa']}}
+  }, required:['word','synonyms','vi','pos']}}
+}, required:['title','entries']};
 async function geminiJSON(prompt, opts={}){
   const parts=[];
   for(const f of (opts.images||[])){ const im=await shrinkImage(f); parts.push({inline_data:{mime_type:im.source.media_type, data:im.source.data}}); }
-  parts.push({text:prompt});
+  parts.push({text: opts.schema ? prompt+'\nFollow the response schema exactly. For "pron", give a list of {"text": synonym or antonym exactly as written, "ipa": its IPA}.' : prompt});
+  const gen={temperature:0.2, responseMimeType:'application/json'};
+  if(opts.schema) gen.responseSchema=opts.schema;
   const j=await geminiFetch(`/models/${encodeURIComponent(settings.geminiModel)}:generateContent`,{method:'POST', signal:opts.signal,
-    body:JSON.stringify({contents:[{role:'user', parts}], generationConfig:{temperature:0.2, responseMimeType:'application/json'}})});
+    body:JSON.stringify({contents:[{role:'user', parts}], generationConfig:gen})});
   const c=j?.candidates?.[0];
   if(!c){ throw {code: j?.promptFeedback?.blockReason ? 'blocked' : 'api_error'}; }
-  const text=(c.content?.parts||[]).map(p=>p.text||'').join('');
+  const text=(c.content?.parts||[]).filter(p=>!p.thought).map(p=>p.text||'').join('');
+  lastAIRaw=text;
   if(!text.trim()) throw {code: c.finishReason==='SAFETY' ? 'blocked' : 'invalid_json'};
   return parseLooseJSON(text);
 }
@@ -1315,12 +1327,16 @@ async function readImages(files){
     if(!useOCR){
      try{
       const imgs = fs;
-      const data = await eng.json(IMG_PROMPT, {images:imgs, signal:imgCtl.signal});
+      lastAIRaw='';
+      const data = await eng.json(IMG_PROMPT, eng.kind==='gemini' ? {images:imgs, signal:imgCtl.signal, schema:IMG_SCHEMA} : {images:imgs, signal:imgCtl.signal});
       imgCtl=null;
-      if(await importStructured(data, 'ảnh')) return;
+      const r=await importStructured(data, 'ảnh');
+      if(r===true) return;
+      if(r==='empty' && eng.kind==='gemini') throw {code:'no_entries'};
      }catch(e){
       if(eng.kind!=='gemini' || e?.code==='cancelled') throw e;
       useOCR=true; fbNote=` (Gemini chưa đọc được: ${GEMINI_ERR[e?.code]||'lỗi không rõ'} Đã dùng OCR miễn phí thay thế.)`;
+      if(lastAIRaw && (e?.code==='no_entries'||e?.code==='invalid_json')) fbNote+=` Gemini trả về: “${lastAIRaw.replace(/\s+/g,' ').slice(0,220)}…”`;
       setMsg('Gemini chưa đọc được, đang chuyển sang OCR miễn phí…');
      }
     }
@@ -1339,13 +1355,35 @@ async function readImages(files){
   if(mode==='decks') renderDecks();
 }
 /* JSON from Claude, the Gemini API, or pasted from the Gemini app: {title, entries:[{word, synonyms, antonyms, notes, ipa, vi, pos, pron}]} */
+function findEntries(data){
+  if(Array.isArray(data)) return data;
+  if(!data || typeof data!=='object') return [];
+  for(const k of ['entries','words','vocabulary','vocab','items','list','data','results']) if(Array.isArray(data[k])) return data[k];
+  for(const v of Object.values(data)){ if(Array.isArray(v) && v.some(x=>x && typeof x==='object')) return v; }
+  for(const v of Object.values(data)){ if(v && typeof v==='object' && !Array.isArray(v)){ const r=findEntries(v); if(r.length) return r; } }
+  // {"nocturnal": {...}, "pale": {...}}
+  const vals=Object.entries(data).filter(([,v])=>v && typeof v==='object' && !Array.isArray(v));
+  return vals.length ? vals.map(([k,v])=>({word:k, ...v})) : [];
+}
 async function importStructured(data, from){
-  const arr = Array.isArray(data) ? data : (Array.isArray(data?.entries) ? data.entries : []);
+  const arr = findEntries(data);
   const str = v => String(v ?? '').trim();
-  const list = a => (Array.isArray(a) ? a : (a ? [a] : [])).map(str).filter(Boolean);
-  const entries = arr.map(x=>({w:str(x?.word), syn:list(x?.synonyms), ant:list(x?.antonyms), notes:list(x?.notes).map(n=>n.includes('=')?n:n+' ='), ipa:str(x?.ipa).replace(/^\/|\/$/g,''), vi:str(x?.vi).replace(/\|/g,'/'), pos:normPOS(x?.pos)||guessPOS(str(x?.word))})).filter(e=>e.w && e.syn.length);
-  if(!entries.length){ imgStatus={msg:`Không tìm thấy từ nào trong ${from}. Thử lại với ảnh rõ hơn hoặc cắt sát phần từ vựng.`,err:true,busy:false}; return false; }
-  for(const x of arr){ const p=x?.pron; if(p && typeof p==='object' && !Array.isArray(p)) for(const [k,v] of Object.entries(p)){ const ip=str(v).replace(/^\/|\/$/g,''); if(ip) E.pron[norm(k)]=ip; } }
+  const list = a => (Array.isArray(a) ? a : (typeof a==='string' && a ? (/[,;]/.test(a) && !/^(a|an|the)\s/i.test(a) ? a.split(/\s*[,;]\s*/) : [a]) : [])).map(v=>typeof v==='object'&&v ? (v.text||v.word||v.value||'') : v).map(str).filter(Boolean);
+  const pick = (x, ...ks) => { for(const k of ks){ if(x?.[k]!=null && x[k]!=='' && !(Array.isArray(x[k])&&!x[k].length)) return x[k]; } return ''; };
+  const entries = arr.map(x=>{
+    const w=str(pick(x,'word','headword','term','Word','english','en','root'));
+    let syn=list(pick(x,'synonyms','synonym','Synonyms','meanings','meaning','equivalents'));
+    if(!syn.length){ const d=str(pick(x,'definition','definition_en','explanation','gloss')); if(d) syn=[d]; }
+    return {w, syn, ant:list(pick(x,'antonyms','antonym','Antonyms','opposites')), notes:list(pick(x,'notes','roots','root_notes','etymology')).map(n=>n.includes('=')?n:n+' ='),
+      ipa:str(pick(x,'ipa','IPA','pronunciation','phonetic')).replace(/^[\/\[]|[\/\]]$/g,''), vi:str(pick(x,'vi','vietnamese','meaning_vi','nghia','translation')).replace(/\|/g,'/'),
+      pos:normPOS(pick(x,'pos','part_of_speech','partOfSpeech','type'))||guessPOS(w)};
+  }).filter(e=>e.w && e.syn.length);
+  if(!entries.length){ imgStatus={msg:`Không tìm thấy từ nào trong ${from}. Thử lại với ảnh rõ hơn hoặc cắt sát phần từ vựng.`,err:true,busy:false}; return 'empty'; }
+  for(const x of arr){
+    const p=x?.pron;
+    if(Array.isArray(p)) for(const it of p){ const k=str(it?.text||it?.word||it?.phrase), ip=str(it?.ipa).replace(/^[\/\[]|[\/\]]$/g,''); if(k&&ip) E.pron[norm(k)]=ip; }
+    else if(p && typeof p==='object') for(const [k,v] of Object.entries(p)){ const ip=str(v).replace(/^[\/\[]|[\/\]]$/g,''); if(ip) E.pron[norm(k)]=ip; }
+  }
   E.text = (E.text.trim() ? E.text.trimEnd()+'\n' : '') + entries.map(toLine).join('\n');
   if(!E.name.trim()) E.name = str(data?.title) || ('Bài ' + new Date().toLocaleDateString('vi-VN'));
   imgStatus={msg:'',err:false,busy:false};
@@ -1378,9 +1416,9 @@ async function importPasted(text){
   text=String(text||'').trim(); if(!text) return false;
   if(!E) newEditor(null);
   let data=null; try{ data=parseLooseJSON(text); }catch{}
-  if(data && (Array.isArray(data) || Array.isArray(data.entries))){
+  if(data && typeof data==='object' && findEntries(data).length){
     const ok=await importStructured(data, 'kết quả Gemini');
-    if(!ok && mode==='decks') renderDecks();
+    if(ok!==true && mode==='decks') renderDecks();
     return true;
   }
   if(parseText(text).entries.length){
