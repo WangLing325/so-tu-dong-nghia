@@ -41,7 +41,7 @@ Có 3 cách đọc ảnh (chọn trong tab **Bài học**):
 | Cách | Độ chính xác | Chi phí |
 |---|---|---|
 | **OCR miễn phí** (mặc định) | Khá, đôi khi đọc sai vài chữ | Miễn phí |
-| **Khóa API Gemini** (*Tự động đọc ảnh bằng khóa API Gemini*) | Rất tốt, tự sửa lỗi chính tả | Miễn phí, có giới hạn lượt mỗi ngày |
+| **Khóa API Gemini** (*Tự động đọc ảnh bằng khóa API Gemini*), [xem cách lấy khóa](#lấy-khóa-api-gemini-miễn-phí) | Rất tốt, tự sửa lỗi chính tả | Miễn phí, có giới hạn lượt mỗi ngày |
 | **Ứng dụng Gemini** (*Đọc bằng ứng dụng Gemini*): sao chép câu lệnh → gửi ảnh trong Gemini → dán kết quả về | Rất tốt | Dùng gói Gemini của bạn |
 
 ### Bước 4 · Đợi ứng dụng dịch và thêm ví dụ
@@ -70,6 +70,43 @@ Mỗi lần đưa ảnh vào là một **bài**. Nên đặt tên bài theo unit
 Ứng dụng nhớ mức độ thuộc của từng từ (0–5) và ưu tiên cho bạn ôn những từ hay quên.
 
 ---
+
+## Lấy khóa API Gemini (miễn phí)
+
+Khóa API giúp ứng dụng **tự đọc ảnh bằng Gemini**: chính xác hơn OCR miễn phí, tự sửa lỗi chính tả và viết nghĩa tiếng Việt, từ loại, phiên âm, ví dụ. Bạn chỉ cần một tài khoản Google.
+
+### 1. Tạo khóa
+1. Mở **https://aistudio.google.com/apikey** và đăng nhập bằng tài khoản Google.
+2. Lần đầu vào, đọc và đồng ý với điều khoản của Google AI Studio.
+3. Bấm **Create API key** (Tạo khóa API). Nếu được hỏi chọn dự án, chọn **Create API key in new project** (tạo trong dự án mới).
+4. Khóa hiện ra là một dãy ký tự bắt đầu bằng `AIza…`. Bấm **Copy** để sao chép.
+
+> Không cần nhập thẻ thanh toán. Nếu trang yêu cầu bật thanh toán (billing) thì bạn đang ở bước tạo khóa trả phí: bỏ qua và dùng khóa miễn phí.
+
+### 2. Dán khóa vào ứng dụng
+1. Mở ứng dụng, vào tab **Bài học**.
+2. Mở mục **Tự động đọc ảnh bằng khóa API Gemini**.
+3. Dán khóa vào ô **Khóa API Gemini**, bấm **Lưu và kiểm tra**.
+4. Thấy dòng *"Đã bật Gemini (…)"* là xong. Ứng dụng tự chọn mô hình **Flash-Lite** (nhiều lượt miễn phí nhất); có thể đổi ở ô **Mô hình**.
+
+Từ đó, mỗi ảnh đưa vào sẽ được Gemini đọc. Nếu Gemini lỗi hoặc hết lượt trong ngày, ứng dụng **tự chuyển sang OCR miễn phí** và báo lý do.
+
+### 3. Giới hạn và lưu ý
+- **Giới hạn miễn phí:** Google không công bố con số cố định; mỗi tài khoản xem giới hạn của mình trong AI Studio. Mỗi ảnh dùng 1 lượt. Lượt dùng được đặt lại mỗi ngày.
+- **Gói Gemini Pro / Google AI Pro không tăng giới hạn của khóa API.** Muốn dùng gói Pro, chọn cách **Đọc bằng ứng dụng Gemini** (sao chép câu lệnh và dán kết quả).
+- **Quyền riêng tư:** ở bản miễn phí, Google có thể dùng nội dung gửi lên để cải thiện sản phẩm. Ảnh cột từ vựng thì không sao, nhưng đừng chụp kèm thông tin cá nhân.
+- **Giữ khóa bí mật:** khóa chỉ lưu trong trình duyệt của bạn và chỉ gửi đến Google. Đừng gửi khóa cho người khác hay dán lên mạng. Nếu lỡ lộ, vào lại https://aistudio.google.com/apikey để **xoá khóa cũ và tạo khóa mới**.
+- Mỗi trình duyệt / thiết bị lưu khóa riêng: trên điện thoại cần dán khóa thêm một lần.
+
+### 4. Gặp lỗi?
+| Thông báo trong ứng dụng | Cách xử lý |
+|---|---|
+| *khóa API không đúng hoặc đã bị xoá* | Sao chép lại đủ cả khóa (bắt đầu bằng `AIza`), không thừa dấu cách; hoặc tạo khóa mới. |
+| *đã hết lượt miễn phí hôm nay hoặc gửi quá nhanh* | Đợi vài phút hoặc sang ngày mai; trong lúc đó ứng dụng dùng OCR miễn phí. |
+| *mô hình không còn dùng được* | Bấm **Lưu và kiểm tra** lại để ứng dụng chọn mô hình mới. |
+| *không kết nối được Internet* | Kiểm tra mạng rồi thử lại. |
+
+Muốn tắt Gemini: bấm **Tắt Gemini, xoá khóa** trong cùng mục.
 
 ## Cài như ứng dụng
 - **Máy tính (Edge / Chrome):** bấm nút **Cài đặt ứng dụng** ở đầu trang.
