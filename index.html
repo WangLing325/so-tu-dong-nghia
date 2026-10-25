@@ -221,6 +221,14 @@ select{appearance:auto}
 .deck{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px}
 .deck.cur{border-color:var(--moss);box-shadow:inset 0 0 0 1px var(--moss)}
 .deck h3{font-size:1.1rem;overflow-wrap:anywhere}
+.deck.selectable{cursor:pointer}
+.deck.picked{border-color:var(--ant);box-shadow:inset 0 0 0 1px var(--ant);background:var(--ant-soft)}
+.pickrow{display:flex;gap:10px;align-items:flex-start}
+.pickrow input{width:18px;height:18px;margin-top:3px;accent-color:var(--ant);flex:none}
+.selbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);position:sticky;top:env(safe-area-inset-top,0px);z-index:2}
+.wdel{border:0;background:none;padding:2px 0;font-size:.78rem;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.wdel:hover{color:var(--ant)}
+.wdel.armed{color:var(--ant);font-weight:700}
 .editor{display:flex;flex-direction:column;gap:14px}
 .drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:var(--card)}
 .drop.over{border-color:var(--moss);background:var(--moss-soft)}
@@ -439,6 +447,7 @@ const store = {
   },
   async put(d){
     const body={name:d.name, words:d.words, progress:d.progress||{}, created:d.created||Date.now()};
+    if(d.deleted) body.deleted=true;
     if(this.kind==='db') return this.col.doc(d.id).set(body);
     try{ const all=this.local(); const i=all.findIndex(x=>x.id===d.id); const rec={id:d.id,...body}; if(i>=0) all[i]=rec; else all.push(rec); localStorage.setItem('sotu.decks',JSON.stringify(all)); }catch{}
   },
@@ -467,7 +476,7 @@ const MODES=[['list','Danh sách'],['cards','Thẻ ghi nhớ'],['quiz','Trắc n
 let curId=BUILTIN_ID, mode='cards';
 try{ const s=JSON.parse(localStorage.getItem('sotu.ui')||'{}'); if(s.mode && MODES.some(m=>m[0]===s.mode)) mode=s.mode; if(s.cur) curId=s.cur; }catch{}
 const ALL_ID='__all';
-const validCur = () => { if(curId!==ALL_ID && !decks.has(curId)) curId=BUILTIN_ID; };
+const validCur = () => { if(curId!==ALL_ID && !decks.has(curId)) curId = decks.has(BUILTIN_ID) ? BUILTIN_ID : (sortedDecks()[0]?.id || ALL_ID); };
 validCur();
 const saveUI = () => { try{ localStorage.setItem('sotu.ui',JSON.stringify({mode,cur:curId})); }catch{} };
 /* "Tất cả từ đã lưu": every saved word from every deck, each word remembering which deck owns its progress */
@@ -485,7 +494,7 @@ function allDeck(){
   allCache.progress=progress;
   return allCache;
 }
-const cur = () => curId===ALL_ID ? allDeck() : (decks.get(curId) || decks.get(BUILTIN_ID));
+const cur = () => curId===ALL_ID ? allDeck() : (decks.get(curId) || decks.get(BUILTIN_ID) || allDeck());
 const prog = (d,e) => d.progress[norm(e.w)];
 function grade(e, ok, neutral=false){
   const d=(e._d && decks.get(e._d)) || cur(), k=norm(e.w), p=d.progress[k] || {s:0, seen:0};
@@ -778,6 +787,17 @@ function matchPick(side,i){
 }
 
 /* ---------- 5. list ---------- */
+let wDelArmed=null;
+function deleteWord(k){
+  if(wDelArmed!==k){ wDelArmed=k; renderList(); return; }
+  wDelArmed=null;
+  const i=k.indexOf('::'), deck=decks.get(k.slice(0,i)), w=k.slice(i+2);
+  if(!deck){ renderList(); return; }
+  const idx=deck.words.findIndex(x=>norm(x.w)===w); if(idx<0){ renderList(); return; }
+  const [gone]=deck.words.splice(idx,1); delete deck.progress?.[w];
+  flush(deck.id); invalidateAll(); resetSessions(); renderDeckSel(); renderStats(); renderList();
+  toast(`Đã xoá “${gone.w}” khỏi “${deck.name}”.`);
+}
 let listQ='', resetArmed=false, viEditKey=null, posEditKey=null, posState={busy:false,msg:'',err:false};
 function posEditor(e, deckId){
   const k=viKey(deckId,e);
@@ -860,7 +880,8 @@ function renderList(){
     <div class="list">${rows.length?rows.map(e=>{ const p=prog(d,e), s=p?.s||0;
       const b=!p?.seen?'<span class="badge">Chưa học</span>':s>=4?'<span class="badge m">Đã thuộc</span>':'<span class="badge l">Đang học</span>';
       return `<article class="item"><div class="poscorner">${posEditor(e, e._d||d.id)}</div><div class="iw"><span class="w">${esc(e.w)}</span><span class="meta">${e.ipa?`<span class="ipa" style="font-size:.95rem">/${esc(e.ipa)}/</span>`:''}${speakBtn(e.w)}</span>
-        <span class="meta"><span class="pips" title="Mức nhớ ${s}/5">${[1,2,3,4,5].map(n=>`<i class="${n<=s?'on':''}"></i>`).join('')}</span>${b}</span></div>${detail(e,{viEdit:e._d||d.id})}</article>`; }).join(''):'<div class="empty">Không có từ nào khớp.</div>'}</div></div>`;
+        <span class="meta"><span class="pips" title="Mức nhớ ${s}/5">${[1,2,3,4,5].map(n=>`<i class="${n<=s?'on':''}"></i>`).join('')}</span>${b}</span>
+        <span class="meta"><button type="button" class="wdel ${wDelArmed===viKey(e._d||d.id,e)?'armed':''}" data-act="wdel" data-k="${esc(viKey(e._d||d.id,e))}">${wDelArmed===viKey(e._d||d.id,e)?'Bấm lần nữa để xoá từ':'Xoá từ'}</button></span></div>${detail(e,{viEdit:e._d||d.id})}</article>`; }).join(''):'<div class="empty">Không có từ nào khớp.</div>'}</div></div>`;
   const inp=$('#listq');
   const ps=$('#posel');
   if(ps){ ps.focus({preventScroll:true}); ps.addEventListener('change',()=>savePOS(ps.dataset.k, ps.value)); ps.addEventListener('blur',()=>{ if(posEditKey){ setTimeout(()=>{ if(posEditKey===ps.dataset.k){ posEditKey=null; renderList(); } },150); } });
@@ -973,6 +994,22 @@ function geminiAppPanel(){
       <div class="row-btns"><button class="btn small primary" type="button" data-act="gappimport">Lưu và bắt đầu học</button></div>
     </div></details>`;
 }
+let selMode=false, selArmed=false; const selIds=new Set();
+async function deleteDecks(ids){
+  const names=ids.map(id=>decks.get(id)?.name).filter(Boolean);
+  let failed=0;
+  for(const id of ids){
+    if(!decks.has(id)) continue;
+    decks.delete(id);
+    if(E?.id===id) newEditor(null);
+    try{
+      if(id===BUILTIN_ID) await store.put({id, name:'(đã xoá)', words:[], progress:{}, created:0, deleted:true});
+      else await store.del(id);
+    }catch{ failed++; }
+  }
+  invalidateAll(); validCur(); resetSessions(); saveUI(); renderAll();
+  toast(failed ? `Chưa xoá được ${failed} bài trên bộ lưu. Thử lại sau.` : names.length===1 ? `Đã xoá “${names[0]}”.` : `Đã xoá ${names.length} bài.`);
+}
 let engKind=null, gemState={busy:false,msg:'',err:false,models:[]};
 function geminiPanel(){
   const on=!!(settings.geminiKey && settings.geminiModel);
@@ -1017,16 +1054,25 @@ function renderDecks(){
   const list=sortedDecks(), all=allDeck(), ca=counts(all);
   const pr=parseText(E.text);
   $('#stage').innerHTML=`<div style="display:flex;flex-direction:column;gap:28px">
-   <section style="display:flex;flex-direction:column;gap:12px"><h2 style="font-size:1.25rem">Các bài của bạn</h2>
-    <div class="decks"><div class="deck ${curId===ALL_ID?'cur':''}" style="background:var(--moss-soft)"><h3>★ Tất cả từ đã lưu</h3>
+   <section style="display:flex;flex-direction:column;gap:12px">
+    <div class="toolbar" style="color:inherit"><h2 style="font-size:1.25rem">Các bài của bạn</h2>
+      ${list.length?`<button class="btn small ${selMode?'':'warn'}" data-act="selmode">${selMode?'Xong':'Chọn bài để xoá'}</button>`:''}</div>
+    ${selMode?`<div class="selbar" role="region" aria-label="Xoá nhiều bài">
+      <span><b>${selIds.size}</b> bài đã chọn</span>
+      <span class="row-btns"><button class="btn small" data-act="selall">${selIds.size===list.length?'Bỏ chọn tất cả':'Chọn tất cả'}</button>
+      <button class="btn small ${selIds.size?'warn':''}" data-act="seldel" ${selIds.size?'':'disabled'}>${selArmed?`Bấm lần nữa để xoá vĩnh viễn ${selIds.size} bài`:`Xoá ${selIds.size||''} bài đã chọn`}</button></span></div>`:''}
+    <div class="decks">${selMode?'':`<div class="deck ${curId===ALL_ID?'cur':''}" style="background:var(--moss-soft)"><h3>★ Tất cả từ đã lưu</h3>
       <div class="muted" style="font-size:.85rem">${ca.t} từ từ ${list.length} bài · đã thuộc ${ca.m}${curId===ALL_ID?' · đang học':''}</div>
       <div class="muted" style="font-size:.82rem">Thẻ, trắc nghiệm, gõ từ và ghép cặp trộn từ mọi bài, ưu tiên từ bạn hay quên.</div>
-      ${curId!==ALL_ID?`<div class="row-btns"><button class="btn small primary" data-act="use" data-id="${ALL_ID}">Ôn tất cả</button></div>`:''}</div>
-    ${list.map(d=>{ const c=counts(d); return `<div class="deck ${d.id===curId?'cur':''}"><h3>${esc(d.name)}</h3>
+      ${curId!==ALL_ID?`<div class="row-btns"><button class="btn small primary" data-act="use" data-id="${ALL_ID}">Ôn tất cả</button></div>`:''}</div>`}
+    ${list.map(d=>{ const c=counts(d);
+      if(selMode) return `<label class="deck selectable ${selIds.has(d.id)?'picked':''}" for="sel-${esc(d.id)}"><span class="pickrow"><input type="checkbox" id="sel-${esc(d.id)}" data-sel="${esc(d.id)}" ${selIds.has(d.id)?'checked':''}><h3>${esc(d.name)}</h3></span>
+        <span class="muted" style="font-size:.85rem">${c.t} từ · đã thuộc ${c.m}</span></label>`;
+      return `<div class="deck ${d.id===curId?'cur':''}"><h3>${esc(d.name)}</h3>
       <div class="muted" style="font-size:.85rem">${c.t} từ · đã thuộc ${c.m}${d.id===curId?' · đang học':''}</div>
       <div class="row-btns">${d.id!==curId?`<button class="btn small primary" data-act="use" data-id="${esc(d.id)}">Học bài này</button>`:''}
         <button class="btn small" data-act="edit" data-id="${esc(d.id)}">Sửa</button>
-        ${d.builtin?'':`<button class="btn small ${delArmed===d.id?'warn':''}" data-act="del" data-id="${esc(d.id)}">${delArmed===d.id?'Bấm lần nữa để xoá':'Xoá'}</button>`}</div></div>`; }).join('')}</div>
+        <button class="btn small ${delArmed===d.id?'warn':''}" data-act="del" data-id="${esc(d.id)}">${delArmed===d.id?'Bấm lần nữa để xoá':'Xoá'}</button></div></div>`; }).join('')}</div>
     <div class="toolbar"><span>${store.kind==='db'?'Bài và tiến độ được lưu riêng cho tài khoản của bạn.':(IS_LOCAL?'Bài và tiến độ lưu trên máy này. Nên sao lưu ra tệp thỉnh thoảng.':'Bài và tiến độ đang lưu trong trình duyệt này.')}</span>
       <span class="row-btns"><button class="btn small" data-act="backup">Sao lưu ra tệp</button><label class="btn small" for="restorein" style="cursor:pointer">Khôi phục từ tệp</label><input type="file" id="restorein" accept="application/json,.json" hidden></span></div></section>
 
@@ -1064,6 +1110,7 @@ function renderDecks(){
    </section></div>`;
   $('#ename').addEventListener('input',ev=>{ E.name=ev.target.value; });
   $('#etext').addEventListener('input',ev=>{ E.text=ev.target.value; const p=parseText(E.text); $('#pcount').innerHTML=`<span>Đọc được <b>${p.entries.length}</b> từ</span>${p.bad.length?`<span style="color:var(--ant)">Dòng ${p.bad.slice(0,8).join(', ')}${p.bad.length>8?'…':''} chưa đúng định dạng (thiếu dấu =)</span>`:''}`; });
+  document.querySelectorAll('[data-sel]').forEach(cb=>cb.addEventListener('change',()=>{ const id=cb.dataset.sel; cb.checked?selIds.add(id):selIds.delete(id); selArmed=false; renderDecks(); }));
   $('#gemmodel')?.addEventListener('change',ev=>{ if(settings.geminiKey){ settings.geminiModel=ev.target.value; saveSettings(); gemState={...gemState,msg:`Đã chọn ${ev.target.value}.`,err:false}; renderDecks(); $('#gembox')?.setAttribute('open',''); } });
   $('#autosave')?.addEventListener('change',ev=>{ settings.autoSave=ev.target.checked; saveSettings(); renderDecks(); });
   $('#restorein').addEventListener('change',ev=>{ const f=ev.target.files[0]; if(f) importBackup(f); });
@@ -1504,7 +1551,11 @@ const acts={
     d.progress={}; resetSessions(); scheduleSave(d); renderStats(); renderList(); toast('Đã đặt lại tiến độ.'); },
   use:b=>{ curId=b.dataset.id; resetSessions(); saveUI(); renderAll(); },
   edit:b=>{ newEditor(decks.get(b.dataset.id)); renderDecks(); $('#ename')?.scrollIntoView({behavior:'smooth',block:'center'}); },
-  del:async b=>{ const id=b.dataset.id; if(delArmed!==id){ delArmed=id; return renderDecks(); } delArmed=null; const name=decks.get(id)?.name; decks.delete(id); invalidateAll(); if(curId===id){ curId=BUILTIN_ID; resetSessions(); } if(E?.id===id) newEditor(null); try{ await store.del(id); }catch{ toast('Chưa xoá được trên bộ lưu. Thử lại sau.'); } saveUI(); renderAll(); toast(`Đã xoá “${name}”.`); },
+  del:async b=>{ const id=b.dataset.id; if(delArmed!==id){ delArmed=id; return renderDecks(); } delArmed=null; await deleteDecks([id]); },
+  selmode:()=>{ selMode=!selMode; selIds.clear(); selArmed=false; delArmed=null; renderDecks(); },
+  selall:()=>{ const all=sortedDecks().map(d=>d.id); if(selIds.size===all.length) selIds.clear(); else all.forEach(i=>selIds.add(i)); selArmed=false; renderDecks(); },
+  seldel:async()=>{ if(!selIds.size) return; if(!selArmed){ selArmed=true; return renderDecks(); } const ids=[...selIds]; selMode=false; selIds.clear(); selArmed=false; await deleteDecks(ids); },
+  wdel:b=>deleteWord(b.dataset.k),
   save:()=>saveDeck(),
   newdeck:()=>{ newEditor(null); renderDecks(); },
   stopimg:()=>imgCtl?.abort(),
@@ -1581,7 +1632,9 @@ renderAll();
   await store.init();
   let stored=[]; try{ stored=await store.all(); }catch{}
   for(const s of stored){
-    if(!s || !s.id || !Array.isArray(s.words)) continue;
+    if(!s || !s.id) continue;
+    if(s.deleted){ decks.delete(s.id); continue; }     // a deleted sample lesson stays deleted
+    if(!Array.isArray(s.words)) continue;
     const have=decks.get(s.id);
     if(s.id===BUILTIN_ID && have){ const src=new Map(have.words.map(e=>[norm(e.w),e])); s.words=s.words.map(e=>{ const b=src.get(norm(e.w)); return b ? {...e, vi:e.vi||b.vi||'', pos:e.pos||b.pos||''} : e; }); }
     decks.set(s.id, {...s, progress:mergeProgress(s.progress, have?.progress), builtin:s.id===BUILTIN_ID, created:s.id===BUILTIN_ID?0:(s.created||1)});
