@@ -243,6 +243,7 @@ textarea{min-height:260px;font-family:var(--f-ipa);font-size:1.02rem;line-height
 .check{display:flex;gap:8px;align-items:center;font-size:.9rem;cursor:pointer}
 .check input{width:16px;height:16px;accent-color:var(--moss)}
 details.fmt summary{cursor:pointer}
+.fmt a{color:var(--moss);font-weight:600}
 body.dragging .wrap{outline:2px dashed var(--moss);outline-offset:6px;border-radius:12px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;
   background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:.9rem;transition:opacity .2s, transform .2s;max-width:calc(100% - 32px)}
@@ -797,7 +798,7 @@ async function fillPOS(){
   if(!todo.length) return;
   posState={busy:true,err:false,msg:`Đang tìm từ loại cho ${todo.length} từ…`}; renderList();
   let n=0;
-  const eng=IS_LOCAL?null:await getEngine();
+  const eng=(IS_LOCAL && !settings.geminiKey)?null:await getEngine();
   if(eng?.json){
     try{
       const out=await eng.json(`For each English word below give its part of speech as used with the meaning shown. Use only one of: n, v, adj, adv, prep, conj, pron, interj, phr.
@@ -873,7 +874,7 @@ let trState={busy:false,msg:'',err:false};
 async function translateMissing(){
   const d=cur(), miss=d.words.filter(e=>!e.vi).slice(0,80);
   if(!miss.length || trState.busy) return;
-  if(IS_LOCAL){
+  if(IS_LOCAL && !settings.geminiKey){
     trState={busy:true,err:false,msg:`Đang dịch ${miss.length} từ…`}; renderList();
     const owners=d.virtual?[...decks.values()]:[d];
     const real=miss.map(e=>((e._d&&decks.get(e._d))||d).words.find(x=>norm(x.w)===norm(e.w))).filter(Boolean);
@@ -903,7 +904,7 @@ Reply with only a JSON array of {"word": string, "vi": string}, same words, same
     touched.forEach(o=>scheduleSave(o));
     trState={busy:false,err:!n,msg:n?`Đã thêm nghĩa tiếng Việt cho ${n} từ. Có thể sửa lại ở mục Bài học.`:'Chưa dịch được từ nào. Bấm thử lại.'};
   }catch(e){
-    const map={bad_key:'Khóa API không đúng. Kiểm tra lại ở Cài đặt.', network:'Không kết nối được Internet.', rate_limited:'Đang gửi quá nhiều yêu cầu. Thử lại sau ít phút.', not_granted:'Bạn chưa cho phép trang dùng Claude để dịch.', session_expired:'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.'};
+    const map={bad_key:'Khóa API không đúng. Kiểm tra lại ở Cài đặt.', quota:'Gemini đã hết lượt miễn phí hôm nay. Thử lại ngày mai.', network:'Không kết nối được Internet.', rate_limited:'Đang gửi quá nhiều yêu cầu. Thử lại sau ít phút.', not_granted:'Bạn chưa cho phép trang dùng Claude để dịch.', session_expired:'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.'};
     trState={busy:false,err:true,msg:map[e?.code]||'Có lỗi khi dịch. Bấm thử lại.'};
   }
   if(mode==='list') renderList();
@@ -913,7 +914,7 @@ let prState={busy:false,msg:'',err:false};
 async function fillPron(){
   const d=cur(), miss=[...missingPron(d).values()].slice(0,150);
   if(!miss.length || prState.busy) return;
-  if(IS_LOCAL){
+  if(IS_LOCAL && !settings.geminiKey){
     prState={busy:true,err:false,msg:'Đang tìm phiên âm…'}; renderList();
     const owners=d.virtual?[...decks.values()]:[d];
     let n=0;
@@ -947,7 +948,7 @@ Example: {"night-active":"ˌnaɪt ˈæktɪv","scarce":"skeəs"}
     invalidateAll();
     prState={busy:false,err:!n,msg:n?`Đã thêm phiên âm cho ${n} từ đồng nghĩa và trái nghĩa.`:'Chưa lấy được phiên âm. Bấm thử lại.'};
   }catch(e){
-    const map={bad_key:'Khóa API không đúng. Kiểm tra lại ở Cài đặt.', network:'Không kết nối được Internet.', rate_limited:'Đang gửi quá nhiều yêu cầu. Thử lại sau ít phút.', not_granted:'Bạn chưa cho phép trang dùng Claude.', session_expired:'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.'};
+    const map={bad_key:'Khóa API không đúng. Kiểm tra lại ở Cài đặt.', quota:'Gemini đã hết lượt miễn phí hôm nay. Thử lại ngày mai.', network:'Không kết nối được Internet.', rate_limited:'Đang gửi quá nhiều yêu cầu. Thử lại sau ít phút.', not_granted:'Bạn chưa cho phép trang dùng Claude.', session_expired:'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.'};
     prState={busy:false,err:true,msg:map[e?.code]||'Có lỗi khi lấy phiên âm. Bấm thử lại.'};
   }
   renderStats();
@@ -955,7 +956,43 @@ Example: {"night-active":"ˌnaɪt ˈæktɪv","scarce":"skeəs"}
 }
 
 /* ---------- 6. decks + import ---------- */
-let engKind=null;
+let engKind=null, gemState={busy:false,msg:'',err:false,models:[]};
+function geminiPanel(){
+  const on=!!(settings.geminiKey && settings.geminiModel);
+  const models=gemState.models.length?gemState.models:(settings.geminiModel?[settings.geminiModel]:[]);
+  return `<details class="fmt" id="gembox" ${on||gemState.msg?'':''}><summary><b>Đọc ảnh bằng Gemini</b> <span class="muted">· ${on?`đang bật (${esc(settings.geminiModel)})`:'chưa bật, đang dùng OCR miễn phí'}</span></summary>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      <p style="margin:0">Gemini đọc ảnh chính xác hơn OCR miễn phí, tự sửa lỗi chính tả và điền nghĩa tiếng Việt, từ loại, phiên âm. Khóa API miễn phí, không tốn usage của Claude.</p>
+      <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px">
+        <li>Mở <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, đăng nhập bằng tài khoản Google.</li>
+        <li>Bấm <b>Create API key</b>, rồi sao chép khóa.</li>
+        <li>Dán vào ô bên dưới và bấm <b>Lưu và kiểm tra</b>.</li>
+      </ol>
+      <label style="display:flex;flex-direction:column;gap:4px" for="gemkey"><span class="label">Khóa API Gemini</span><input class="input" id="gemkey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" value="${esc(settings.geminiKey)}"></label>
+      ${models.length?`<label style="display:flex;flex-direction:column;gap:4px" for="gemmodel"><span class="label">Mô hình (Flash-Lite có nhiều lượt miễn phí nhất)</span><select id="gemmodel">${models.map(m=>`<option value="${esc(m)}" ${m===settings.geminiModel?'selected':''}>${esc(m)}</option>`).join('')}</select></label>`:''}
+      <div class="row-btns"><button class="btn small primary" data-act="gemsave" ${gemState.busy?'disabled':''}>${gemState.busy?'Đang kiểm tra…':'Lưu và kiểm tra'}</button>${settings.geminiKey?'<button class="btn small" data-act="gemclear">Tắt Gemini, xoá khóa</button>':''}</div>
+      ${gemState.msg?`<div class="status ${gemState.err?'err':''}" role="status">${esc(gemState.msg)}</div>`:''}
+      <p class="muted" style="margin:0;font-size:.82rem">Khóa chỉ lưu trong trình duyệt này, không gửi đi đâu ngoài Google. Ở bản miễn phí, Google có thể dùng ảnh và nội dung gửi lên để cải thiện sản phẩm, nên đừng chụp kèm thông tin cá nhân. Giới hạn lượt dùng mỗi ngày xem trong AI Studio.</p>
+    </div></details>`;
+}
+async function geminiSave(){
+  const key=($('#gemkey')?.value||'').trim(), chosen=$('#gemmodel')?.value||'';
+  if(!key){ gemState={...gemState,msg:'Hãy dán khóa API trước.',err:true}; return renderDecks(); }
+  gemState={...gemState,busy:true,msg:'',err:false}; renderDecks(); $('#gembox')?.setAttribute('open','');
+  const prevKey=settings.geminiKey; settings.geminiKey=key;
+  try{
+    const models=await geminiListModels();
+    if(!models.length) throw {code:'bad_model'};
+    const pick = key===prevKey && models.includes(chosen) ? chosen : geminiPick(models);
+    settings.geminiModel=pick; saveSettings();
+    gemState={busy:false,err:false,models,msg:`Đã bật Gemini (${pick}). Từ giờ ảnh sẽ được đọc bằng Gemini.`};
+    engKind='gemini'; imgOK=true;
+  }catch(e){
+    settings.geminiKey=prevKey; 
+    gemState={...gemState,busy:false,err:true,msg:'Chưa bật được: '+(GEMINI_ERR[e?.code]||'lỗi không rõ.')+(e?.message?` (${e.message})`:'')};
+  }
+  renderDecks(); $('#gembox')?.setAttribute('open','');
+}
 let E=null, delArmed=null, imgOK=null, imgCtl=null, imgStatus={msg:'',err:false,busy:false}, thumbs=[];
 function newEditor(d){ E = d ? {id:d.id, name:d.name, text:d.words.map(toLine).join('\n'), pron:Object.assign({}, ...d.words.map(e=>e.si||{}))} : {id:null, name:'', text:'', pron:{}}; thumbs=[]; imgStatus={msg:'',err:false,busy:false}; }
 function renderDecks(){
@@ -989,6 +1026,7 @@ function renderDecks(){
       <input type="file" id="imgin" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
     </div>
     ${imgOK===false?`<p class="muted" style="margin:0;font-size:.88rem">Đọc ảnh tự động không dùng được ở đây. Hãy gõ hoặc dán danh sách từ theo định dạng bên dưới.</p>`:''}
+    ${IS_LOCAL?geminiPanel():''}
     ${imgOK!==false?`<label class="check" for="autosave"><input type="checkbox" id="autosave" ${settings.autoSave?'checked':''}> Tự lưu và vào học ngay sau khi đọc ảnh</label>`:''}
     <label style="display:flex;flex-direction:column;gap:4px" for="etext"><span class="label">Danh sách từ · mỗi dòng một từ</span>
       <textarea id="etext" spellcheck="false" placeholder="nocturnal = night-active, after-dark, nighttime #diurnal (noc- = night) /nɒkˈtɜːnl/ | hoạt động về đêm">${esc(E.text)}</textarea></label>
@@ -1008,6 +1046,7 @@ function renderDecks(){
    </section></div>`;
   $('#ename').addEventListener('input',ev=>{ E.name=ev.target.value; });
   $('#etext').addEventListener('input',ev=>{ E.text=ev.target.value; const p=parseText(E.text); $('#pcount').innerHTML=`<span>Đọc được <b>${p.entries.length}</b> từ</span>${p.bad.length?`<span style="color:var(--ant)">Dòng ${p.bad.slice(0,8).join(', ')}${p.bad.length>8?'…':''} chưa đúng định dạng (thiếu dấu =)</span>`:''}`; });
+  $('#gemmodel')?.addEventListener('change',ev=>{ if(settings.geminiKey){ settings.geminiModel=ev.target.value; saveSettings(); gemState={...gemState,msg:`Đã chọn ${ev.target.value}.`,err:false}; renderDecks(); $('#gembox')?.setAttribute('open',''); } });
   $('#autosave')?.addEventListener('change',ev=>{ settings.autoSave=ev.target.checked; saveSettings(); renderDecks(); });
   $('#restorein').addEventListener('change',ev=>{ const f=ev.target.files[0]; if(f) importBackup(f); });
   const drop=$('#drop'), inp=$('#imgin');
@@ -1047,7 +1086,7 @@ A definition stays as ONE synonym string even if it contains commas. Use [] or "
 /* ---------- engines: Claude (in the viewer) · Claude API key (local app) · free OCR (local app, no key) ---------- */
 const IS_LOCAL = !window.claude;
 const DEFAULT_MODEL='claude-sonnet-5-5';
-let settings={apiKey:'', model:DEFAULT_MODEL, autoSave:true};
+let settings={apiKey:'', model:DEFAULT_MODEL, autoSave:true, geminiKey:'', geminiModel:''};
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('sotu.settings')||'{}')); }catch{}
 const saveSettings = () => { try{ localStorage.setItem('sotu.settings', JSON.stringify(settings)); }catch{} };
 const IMG_TYPES=['image/png','image/jpeg','image/webp','image/gif'];
@@ -1057,6 +1096,7 @@ async function getEngine(){
     const lim=await s.limits().catch(()=>null);
     return {kind:'claude', images:!!lim?.images, maxCount:lim?.images?.maxCount||5, types:lim?.images?.mediaTypes||IMG_TYPES, json:(p,o)=>s.json(p,o)};
   }
+  if(settings.geminiKey && settings.geminiModel) return {kind:'gemini', images:true, maxCount:5, types:IMG_TYPES, json:geminiJSON};
   return {kind:'ocr', images:true, maxCount:10, types:IMG_TYPES, json:null};
 }
 function parseLooseJSON(t){
@@ -1092,6 +1132,43 @@ async function apiJSON(prompt, opts={}){
   }
   const j=await res.json();
   return parseLooseJSON((j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''));
+}
+/* ---------- Gemini (the person's own free API key from Google AI Studio; kept only in this browser) ---------- */
+const GEMINI_BASE='https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_ERR={bad_key:'khóa API không đúng hoặc đã bị xoá.', quota:'đã hết lượt miễn phí hôm nay hoặc gửi quá nhanh.', bad_model:'mô hình không còn dùng được, hãy bấm Kiểm tra khóa lại.', network:'không kết nối được Internet.', overloaded:'máy chủ Gemini đang quá tải.', api_error:'Gemini báo lỗi.', invalid_json:'Gemini trả về kết quả không đọc được.', blocked:'Gemini từ chối ảnh này.'};
+async function geminiFetch(path, init={}){
+  let r;
+  try{ r=await fetch(GEMINI_BASE+path,{...init, headers:{'content-type':'application/json','x-goog-api-key':settings.geminiKey.trim(), ...(init.headers||{})}}); }
+  catch(e){ throw {code: e?.name==='AbortError' ? 'cancelled' : 'network'}; }
+  if(!r.ok){
+    let m=''; try{ m=(await r.json())?.error?.message||''; }catch{}
+    throw {code: r.status===429 ? 'quota' : r.status===404 ? 'bad_model' : (r.status===400||r.status===401||r.status===403) && /key|permission|denied|unauth/i.test(m) ? 'bad_key' : r.status===503 ? 'overloaded' : 'api_error', message:m};
+  }
+  return r.json();
+}
+async function geminiListModels(){
+  const j=await geminiFetch('/models?pageSize=1000');
+  return (j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
+    .map(m=>m.name.replace(/^models\//,''))
+    .filter(n=>/^gemini-/.test(n) && !/(image|tts|audio|live|embedding|robotics|computer-use|native|thinking-exp|learnlm)/.test(n));
+}
+/* prefer Flash-Lite (largest free daily quota), then Flash; stable before preview; newest version first */
+function geminiPick(names){
+  const ver=n=>parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||0);
+  const score=n=>(/flash-lite/.test(n)?3:/flash/.test(n)?2:/pro/.test(n)?0:1)*1000 + (/(preview|exp|latest)/.test(n)?0:200) + ver(n)*10;
+  return [...names].sort((a,b)=>score(b)-score(a))[0]||'';
+}
+async function geminiJSON(prompt, opts={}){
+  const parts=[];
+  for(const f of (opts.images||[])){ const im=await shrinkImage(f); parts.push({inline_data:{mime_type:im.source.media_type, data:im.source.data}}); }
+  parts.push({text:prompt});
+  const j=await geminiFetch(`/models/${encodeURIComponent(settings.geminiModel)}:generateContent`,{method:'POST', signal:opts.signal,
+    body:JSON.stringify({contents:[{role:'user', parts}], generationConfig:{temperature:0.2, responseMimeType:'application/json'}})});
+  const c=j?.candidates?.[0];
+  if(!c){ throw {code: j?.promptFeedback?.blockReason ? 'blocked' : 'api_error'}; }
+  const text=(c.content?.parts||[]).map(p=>p.text||'').join('');
+  if(!text.trim()) throw {code: c.finishReason==='SAFETY' ? 'blocked' : 'invalid_json'};
+  return parseLooseJSON(text);
 }
 function loadScript(src){ return new Promise((res,rej)=>{ const t=document.createElement('script'); t.src=src; t.onload=res; t.onerror=()=>rej({code:'network'}); document.head.append(t); }); }
 /* OCR: turn raw notebook text into "word = ..." lines; wrapped lines are joined, trailing IPA-looking tokens dropped */
@@ -1194,7 +1271,7 @@ async function ocrImages(files, onProgress){
   finally{ await worker.terminate(); }
   return ocrToLines(text);
 }
-const ENGINE_NOTE={claude:'Claude đọc ảnh, tự thêm nghĩa tiếng Việt và phiên âm.', api:'Đọc bằng Claude qua khóa API của bạn, tự thêm nghĩa tiếng Việt và phiên âm.', ocr:'Đọc bằng OCR miễn phí, rồi tự thêm nghĩa tiếng Việt và phiên âm (cần Internet). OCR thỉnh thoảng đọc sai một vài chữ, bạn sửa được ở tab Bài học.'};
+const ENGINE_NOTE={gemini:'Gemini đọc ảnh, tự sửa lỗi chính tả, thêm nghĩa tiếng Việt, từ loại và phiên âm. Nếu Gemini lỗi hay hết lượt, ứng dụng tự dùng OCR miễn phí.', claude:'Claude đọc ảnh, tự thêm nghĩa tiếng Việt và phiên âm.', api:'Đọc bằng Claude qua khóa API của bạn, tự thêm nghĩa tiếng Việt và phiên âm.', ocr:'Đọc bằng OCR miễn phí, rồi tự thêm nghĩa tiếng Việt và phiên âm (cần Internet). OCR thỉnh thoảng đọc sai một vài chữ, bạn sửa được ở tab Bài học.'};
 
 async function readImages(files){
   if(imgStatus.busy) return;
@@ -1207,26 +1284,13 @@ async function readImages(files){
   thumbs.forEach(u=>URL.revokeObjectURL(u)); thumbs=fs.map(f=>URL.createObjectURL(f));
   imgCtl=new AbortController();
   const setMsg=(msg,err=false,busy=true)=>{ imgStatus={msg,err,busy}; const el=document.querySelector('#drop .status'); if(el&&busy){ el.textContent=msg; } else if(mode==='decks') renderDecks(); };
-  imgStatus={msg:(eng.kind==='ocr'?'Đang đọc chữ trong ảnh…':'Claude đang đọc ảnh… thường mất 20–60 giây.')+note, err:false, busy:true}; renderDecks();
+  const who = eng.kind==='gemini' ? 'Gemini' : 'Claude';
+  imgStatus={msg:(eng.kind==='ocr'?'Đang đọc chữ trong ảnh…':`${who} đang đọc ảnh… thường mất 10–60 giây.`)+note, err:false, busy:true}; renderDecks();
+  let useOCR = eng.kind==='ocr', fbNote='';
   try{
-    if(eng.kind==='ocr'){
-      const lines=await ocrImages(fs, pct=>setMsg(`Bước 1/2 · Đang đọc chữ trong ảnh… ${pct}%`+note));
-      const entries=parseText(lines).entries;
-      if(!entries.length){ imgStatus={msg:'Không tìm thấy dòng nào dạng “từ = nghĩa”. Thử ảnh rõ, thẳng và đủ sáng hơn.',err:true,busy:false}; }
-      else {
-        setMsg(`Bước 2/2 · Đã đọc ${entries.length} từ. Đang thêm nghĩa tiếng Việt và phiên âm…`);
-        const [nVi, si] = await Promise.all([freeVi(entries).catch(()=>0), freeIPA(entries).catch(()=>({})), freePOS(entries).catch(()=>0)]);
-        for(const e of entries) if(!e.pos) e.pos=guessPOS(e.w);
-        Object.assign(E.pron, si);
-        E.text=(E.text.trim()?E.text.trimEnd()+'\n':'')+entries.map(toLine).join('\n');
-        if(!E.name.trim()) E.name='Ảnh ' + (d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`)(new Date());
-        const viNote = nVi ? '' : ' Chưa lấy được nghĩa tiếng Việt (kiểm tra Internet), có thể bấm dịch lại ở tab Danh sách.';
-        imgCtl=null; imgStatus={msg:'',err:false,busy:false};
-        if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ và lưu thành bài “${E.name.trim()}”. Nếu OCR đọc sai chữ nào, sửa ở tab Bài học.`+viNote); return; }
-        imgStatus={msg:`Đã đọc ${entries.length} từ. Kiểm tra lại chính tả rồi bấm lưu.`+viNote,err:false,busy:false};
-      }
-    } else {
-      const imgs = eng.kind==='claude' ? fs : fs;
+    if(!useOCR){
+     try{
+      const imgs = fs;
       const data = await eng.json(IMG_PROMPT, {images:imgs, signal:imgCtl.signal});
       const arr = Array.isArray(data) ? data : (Array.isArray(data?.entries) ? data.entries : []);
       const str = v => String(v ?? '').trim();
@@ -1241,10 +1305,32 @@ async function readImages(files){
         if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ từ ảnh và lưu thành bài “${E.name.trim()}”. Muốn sửa thì vào tab Bài học.`); return; }
         imgStatus={msg:`Đã thêm ${entries.length} từ vào danh sách. Kiểm tra lại rồi bấm lưu.`,err:false,busy:false};
       }
+     }catch(e){
+      if(eng.kind!=='gemini' || e?.code==='cancelled') throw e;
+      useOCR=true; fbNote=` (Gemini chưa đọc được: ${GEMINI_ERR[e?.code]||'lỗi không rõ'} Đã dùng OCR miễn phí thay thế.)`;
+      setMsg('Gemini chưa đọc được, đang chuyển sang OCR miễn phí…');
+     }
+    }
+    if(useOCR){
+      const lines=await ocrImages(fs, pct=>setMsg(`Bước 1/2 · Đang đọc chữ trong ảnh… ${pct}%`+note));
+      const entries=parseText(lines).entries;
+      if(!entries.length){ imgStatus={msg:'Không tìm thấy dòng nào dạng “từ = nghĩa”. Thử ảnh rõ, thẳng và đủ sáng hơn.'+fbNote,err:true,busy:false}; }
+      else {
+        setMsg(`Bước 2/2 · Đã đọc ${entries.length} từ. Đang thêm nghĩa tiếng Việt và phiên âm…`);
+        const [nVi, si] = await Promise.all([freeVi(entries).catch(()=>0), freeIPA(entries).catch(()=>({})), freePOS(entries).catch(()=>0)]);
+        for(const e of entries) if(!e.pos) e.pos=guessPOS(e.w);
+        Object.assign(E.pron, si);
+        E.text=(E.text.trim()?E.text.trimEnd()+'\n':'')+entries.map(toLine).join('\n');
+        if(!E.name.trim()) E.name='Ảnh ' + (d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`)(new Date());
+        const viNote = nVi ? '' : ' Chưa lấy được nghĩa tiếng Việt (kiểm tra Internet), có thể bấm dịch lại ở tab Danh sách.';
+        imgCtl=null; imgStatus={msg:'',err:false,busy:false};
+        if(settings.autoSave){ await saveDeck(`Đã đọc ${entries.length} từ và lưu thành bài “${E.name.trim()}”. Nếu OCR đọc sai chữ nào, sửa ở tab Bài học.`+viNote+fbNote); return; }
+        imgStatus={msg:`Đã đọc ${entries.length} từ. Kiểm tra lại chính tả rồi bấm lưu.`+viNote+fbNote,err:false,busy:false};
+      }
     }
   }catch(e){
     const map={cancelled:'Đã dừng đọc ảnh.', rate_limited:'Đang gửi quá nhiều yêu cầu. Thử lại sau ít phút.', image_rejected:'Ảnh không đọc được (sai định dạng hoặc quá lớn). Thử ảnh khác.', invalid_json:'Không tách được từ trong ảnh. Bấm chọn ảnh để thử lại.', empty_completion:'Không tách được từ trong ảnh. Thử ảnh rõ hơn.', session_expired:'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.',
-      bad_key:'Khóa API không đúng hoặc đã bị thu hồi. Kiểm tra lại ở Cài đặt bên dưới.', bad_model:'Tên model không dùng được. Xoá ô Model trong Cài đặt để dùng mặc định.', network:'Không kết nối được Internet. Kiểm tra mạng rồi thử lại.', api_error:'Máy chủ Claude báo lỗi. Thử lại sau ít phút.'};
+      bad_key:'Khóa API không đúng hoặc đã bị thu hồi. Kiểm tra lại ở Cài đặt bên dưới.', bad_model:'Tên model không dùng được. Xoá ô Model trong Cài đặt để dùng mặc định.', network:'Không kết nối được Internet. Kiểm tra mạng rồi thử lại.', api_error:'Máy chủ AI báo lỗi. Thử lại sau ít phút.', quota:'Gemini đã hết lượt miễn phí hôm nay.'};
     if(['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed','images_unavailable'].includes(e?.code)){ imgOK=false; imgStatus={msg:'',err:false,busy:false}; }
     else imgStatus={msg:map[e?.code]||'Có lỗi khi đọc ảnh. Bấm chọn ảnh để thử lại.', err:e?.code!=='cancelled', busy:false};
   }
@@ -1330,6 +1416,8 @@ const acts={
   fillpos:()=>fillPOS(),
   vicancel:()=>{ viEditKey=null; renderList(); },
   backup:()=>exportBackup(),
+  gemsave:()=>geminiSave(),
+  gemclear:()=>{ settings.geminiKey=''; settings.geminiModel=''; saveSettings(); gemState={busy:false,msg:'Đã tắt Gemini. Ảnh sẽ được đọc bằng OCR miễn phí.',err:false,models:[]}; engKind='ocr'; renderDecks(); $('#gembox')?.setAttribute('open',''); },
   spick:b=>synPick(+b.dataset.i),
   scheck:()=>synCheck(),
   sodd:b=>synOdd(+b.dataset.i),
