@@ -166,7 +166,7 @@ select{appearance:auto}
 .flash::before{content:"";position:absolute;left:0;right:0;top:62px;height:2px;background:var(--margin);opacity:.55}
 .face{grid-area:1/1;padding:22px 26px 28px;display:flex;flex-direction:column;gap:18px;transition:opacity .22s ease, transform .22s ease}
 .face[aria-hidden="true"]{opacity:0;transform:translateY(6px);pointer-events:none;position:absolute;inset:0;overflow:hidden}
-.facehead{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:28px}
+.facehead{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:34px}
 .tag{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .bigword{font-family:var(--f-display);font-size:clamp(2.1rem, 7vw, 3.3rem);font-weight:600;line-height:1.1;letter-spacing:-.015em;overflow-wrap:anywhere}
 .wordline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
@@ -688,10 +688,10 @@ function renderCards(){
        <div class="frontrow"><div class="frontword"><div class="bigword">${esc(e.w)}</div>${e.ipa?`<div class="ipa" style="margin-top:6px">/${esc(e.ipa)}/</div>`:''}</div>${imageBlock(e, false, 'flat')}</div>
        <div class="hint">Chạm vào thẻ để xem từ đồng nghĩa</div>`
     : `<div class="facehead"><span class="tag">Nghĩa · nhớ lại từ</span><span class="ipa" style="font-size:.9rem">${e.w.length} ký tự · bắt đầu bằng “${esc([...e.w][0])}”</span></div>
-       ${detail(e,{noEx:true})}<div class="hint">Chạm vào thẻ để xem từ</div>`;
+       <div class="frontrow"><div class="frontword">${detail(e,{noEx:true})}</div>${imageBlock(e, false, 'flat')}</div><div class="hint">Chạm vào thẻ để xem từ</div>`;
   const back = cardDir==='word'
     ? `<div class="facehead"><span class="tag">${esc(e.w)}</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>${imageBlock(e, false, 'top')}${detail(e)}`
-    : `<div class="facehead"><span class="tag">Đáp án</span></div>${detail(e,{withWord:true})}${imageBlock(e, false, '')}`;
+    : `<div class="facehead"><span class="tag">Đáp án</span></div>${imageBlock(e, false, 'top')}${detail(e,{withWord:true})}`;
   $('#stage').innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
     <div class="toolbar"><span class="count">Còn ${C.queue.length} thẻ${p?.seen?` · mức nhớ ${p.s}/5`:' · từ mới'}</span>
       <span class="seg" role="group" aria-label="Mặt trước của thẻ"><button data-act="dir" data-dir="word" aria-pressed="${cardDir==='word'}">Hiện từ</button><button data-act="dir" data-dir="mean" aria-pressed="${cardDir==='mean'}">Hiện nghĩa</button></span></div>
