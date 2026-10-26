@@ -151,11 +151,6 @@ select{appearance:auto}
 .speak.sm{width:26px;height:26px;vertical-align:-6px;margin-left:4px}
 .speak.sm svg{width:13px;height:13px}
 .vitext.none{font-weight:400;font-style:italic;color:var(--muted)}
-.vibtn{margin-left:auto;flex:none;border:1px solid transparent;background:none;color:var(--muted);font-size:.82rem;font-weight:600;padding:3px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:5px}
-.vibtn:hover{color:var(--moss);border-color:var(--line);background:var(--card)}
-.vibtn svg{width:13px;height:13px}
-.viform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.viform .input{flex:1 1 200px;padding:7px 10px;font-weight:500}
 .addimg{flex:none}
 
 /* index card */
@@ -623,7 +618,7 @@ function detail(e, {withWord=false, viEdit=null, noEx=false}={}){
     <div class="line"><span class="sym eq" title="đồng nghĩa">=</span><div class="chips">${e.syn.map(s=>chip(e,s)).join('')}</div></div>
     ${e.ant.length?`<div class="line"><span class="sym neq" title="trái nghĩa">#</span><div class="chips">${e.ant.map(s=>chip(e,s,'a')).join('')}</div></div>`:''}
     ${(e.notes||[]).length?`<div class="line"><span class="sym root" title="gốc từ">( )</span><span class="rootnote">${e.notes.map(esc).join(' · ')}</span></div>`:''}
-    ${viEdit ? viEditor(e, viEdit) : e.vi?`<div class="line vi"><span class="sym vn" title="nghĩa tiếng Việt">VI</span><span class="vitext">${esc(e.vi)}</span></div>`:''}
+    ${e.vi?`<div class="line vi"><span class="sym vn" title="nghĩa tiếng Việt">VI</span><span class="vitext">${esc(e.vi)}</span></div>`:''}
     ${e.ex && !noEx?exampleBlock(e):''}
     ${imageBlock(e, !!viEdit)}
   </div>`;
@@ -672,7 +667,7 @@ function renderMode(){
   ({cards:renderCards, quiz:renderQuiz, syn:renderSyn, type:renderType, match:renderMatch, list:renderList, decks:renderDecks})[mode]();
 }
 function renderAll(){ renderDeckSel(); renderStats(); renderTabs(); renderMode(); }
-function resetSessions(){ C=Q=T=M=S=null; viEditKey=null; posEditKey=null; }
+function resetSessions(){ C=Q=T=M=S=null; posEditKey=null; }
 
 /* ---------- 1. flashcards ---------- */
 let C=null, cardDir='word';
@@ -975,7 +970,7 @@ function matchPick(side,i){
 }
 
 /* ---------- 5. list ---------- */
-let listQ='', resetArmed=false, viEditKey=null, posEditKey=null, posState={busy:false,msg:'',err:false};
+let listQ='', resetArmed=false, posEditKey=null, posState={busy:false,msg:'',err:false};
 function posEditor(e, deckId){
   const k=viKey(deckId,e);
   if(posEditKey===k) return `<select class="posel" id="posel" data-k="${esc(k)}" aria-label="Từ loại của ${esc(e.w)}"><option value="">(chưa rõ)</option>${Object.entries(POS).map(([v,[ab,vn]])=>`<option value="${v}" ${e.pos===v?'selected':''}>${ab} · ${vn}</option>`).join('')}</select>`;
@@ -1039,32 +1034,7 @@ Reply with only a JSON object mapping each word exactly as given to the code. Ex
   posState={busy:false,err:!n,msg:n?`Đã thêm từ loại cho ${n} từ. Bấm vào nhãn từ loại để sửa nếu chưa đúng.`:'Chưa tìm được từ loại. Bạn bấm “+ từ loại” ở từng từ để chọn.'};
   if(mode==='list') renderList();
 }
-const PEN_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 const viKey = (deckId,e) => deckId+'::'+norm(e.w);
-function viEditor(e, deckId){
-  const k=viKey(deckId,e);
-  if(viEditKey===k) return `<form class="line vi viform" data-k="${esc(k)}"><span class="sym vn">VI</span>
-    <input class="input" id="vin" value="${esc(e.vi||'')}" placeholder="Nhập nghĩa tiếng Việt" autocomplete="off" aria-label="Nghĩa tiếng Việt của ${esc(e.w)}">
-    <button class="btn small primary" type="submit">Lưu</button><button class="btn small" type="button" data-act="vicancel">Huỷ</button></form>`;
-  return `<div class="line vi"><span class="sym vn" title="nghĩa tiếng Việt">VI</span><span class="vitext ${e.vi?'':'none'}">${e.vi?esc(e.vi):'Chưa có nghĩa tiếng Việt'}</span>
-    <button class="vibtn" type="button" data-act="viedit" data-k="${esc(k)}" aria-label="${e.vi?'Sửa':'Thêm'} nghĩa tiếng Việt của ${esc(e.w)}">${PEN_SVG}${e.vi?'Sửa':'Thêm nghĩa'}</button></div>`;
-}
-function openViEdit(k){
-  viEditKey=k; renderList();
-  const inp=$('#vin'); if(!inp) return;
-  inp.focus({preventScroll:true}); inp.select();
-  inp.closest('.item')?.scrollIntoView({block:'nearest'});
-}
-function saveVi(k, value){
-  const i=k.indexOf('::'), deck=decks.get(k.slice(0,i)), w=k.slice(i+2);
-  const entry=deck?.words.find(x=>norm(x.w)===w);
-  viEditKey=null;
-  if(!entry){ renderList(); return; }
-  const v=String(value).replace(/\|/g,'/').replace(/\s+/g,' ').trim();
-  if(v!==(entry.vi||'')){ entry.vi=v; scheduleSave(deck); invalidateAll(); toast(v?`Đã lưu nghĩa của “${entry.w}”.`:`Đã xoá nghĩa của “${entry.w}”.`); }
-  renderList();
-  $(`[data-act="viedit"][data-k="${CSS.escape(k)}"]`)?.focus({preventScroll:true});
-}
 function renderList(){
   const d=cur(), f=norm(listQ);
   const rows=d.words.filter(e=>!f || norm(e.w).includes(f) || e.syn.some(s=>norm(s).includes(f)) || e.ant.some(s=>norm(s).includes(f)) || norm(e.vi||'').includes(f));
@@ -1089,9 +1059,6 @@ function renderList(){
   const ps=$('#posel');
   if(ps){ ps.focus({preventScroll:true}); ps.addEventListener('change',()=>savePOS(ps.dataset.k, ps.value)); ps.addEventListener('blur',()=>{ if(posEditKey){ setTimeout(()=>{ if(posEditKey===ps.dataset.k){ posEditKey=null; renderList(); } },150); } });
     ps.addEventListener('keydown',ev=>{ if(ev.key==='Escape'){ ev.preventDefault(); posEditKey=null; renderList(); } }); }
-  const vf=$('.viform');
-  if(vf){ vf.addEventListener('submit',ev=>{ ev.preventDefault(); saveVi(vf.dataset.k, $('#vin').value); });
-    $('#vin').addEventListener('keydown',ev=>{ if(ev.key==='Escape'){ ev.preventDefault(); const k=viEditKey; viEditKey=null; renderList(); $(`[data-act="viedit"][data-k="${CSS.escape(k)}"]`)?.focus({preventScroll:true}); } }); }
   inp.addEventListener('input',ev=>{ listQ=ev.target.value; const pos=ev.target.selectionStart; renderList(); const n=$('#listq'); n.focus(); n.setSelectionRange(pos,pos); });
 }
 
@@ -1792,11 +1759,9 @@ const acts={
   newdeck:()=>{ newEditor(null); renderDecks(); },
   stopimg:()=>imgCtl?.abort(),
   translate:()=>translateMissing(),
-  viedit:b=>openViEdit(b.dataset.k),
-  posedit:b=>{ posEditKey=b.dataset.k; viEditKey=null; renderList(); },
+  posedit:b=>{ posEditKey=b.dataset.k; renderList(); },
   fillpos:()=>fillPOS(),
   fillex:()=>fillEx(),
-  vicancel:()=>{ viEditKey=null; renderList(); },
   backup:()=>exportBackup(),
   gemsave:()=>geminiSave(),
   gappcopy:b=>copyGeminiPrompt(b),
@@ -1860,7 +1825,7 @@ window.sotuIpaReady = () => {
   IPA_MAP=null;
   for(const d of decks.values()) for(const e of d.words) if(!e.ipa){ const o=ipaOffline(e.w); if(o) e.ipa=o; }
   invalidateAll();
-  if(!viEditKey && !posEditKey && !document.activeElement?.matches?.('input,textarea,select')) renderMode();
+  if(!posEditKey && !document.activeElement?.matches?.('input,textarea,select')) renderMode();
 };
 renderAll();
 (async()=>{

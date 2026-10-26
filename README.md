@@ -52,7 +52,7 @@ Sau khi đọc ảnh, ứng dụng **tự động**:
 4. thêm **câu ví dụ tiếng Anh kèm câu dịch**,
 5. **lưu thành một bài mới** và mở thẻ ghi nhớ để học ngay.
 
-Thường mất 10–60 giây. Nếu có chữ đọc sai, sửa ở tab **Bài học → Sửa**. Nghĩa tiếng Việt và từ loại sửa trực tiếp được trong tab **Danh sách**.
+Thường mất 10–60 giây. Nếu có chữ đọc sai, sửa ở tab **Bài học → Sửa**. Từ loại sửa trực tiếp được trong tab **Danh sách** (bấm vào nhãn từ loại).
 
 **Ảnh của bạn:** trong tab **Danh sách**, mỗi từ có ô **+ Thêm ảnh**. Bấm để chọn ảnh từ máy, hoặc kéo thả ảnh vào ô đó. Ảnh được thu nhỏ, lưu trong trình duyệt, hiện cả ở hai mặt thẻ ghi nhớ; có **Đổi ảnh / Xoá ảnh**, và được đưa vào tệp *Sao lưu*.
 
