@@ -140,6 +140,12 @@ select{appearance:auto}
 .wimg.flat{margin:0;width:min(320px,40vw);max-width:none}
 .wimg.flat img{width:100%;max-width:none;height:210px}
 @media (max-width:560px){ .frontrow{grid-template-columns:1fr;gap:14px} .wimg.flat{width:100%} .wimg.flat img{height:180px} }
+.wimg.side{margin:8px 0 0;max-width:200px}
+.wimg.side img{max-width:200px;height:130px}
+.wimgnone.side{margin:8px 0 0}
+.wimg.top{margin:0;max-width:240px}
+.wimg.top img{height:150px}
+@media (max-width:560px){ .wimg.side{max-width:100%} .wimg.side img{max-width:100%;height:170px} }
 .wimgnone{margin-left:calc(1.9em + 10px);font-size:.78rem;padding:6px 10px;border:1px dashed var(--line);border-radius:8px;width:fit-content;max-width:100%}
 .wbtn{border:0;background:none;padding:0;font:inherit;font-size:.78rem;color:var(--moss);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .wbtn:hover{color:var(--ink)}
@@ -575,7 +581,7 @@ function setImage(w, img){
   for(const d of decks.values()) for(const e of d.words) if(norm(e.w)===k){ if(img===undefined) delete e.img; else e.img=img; touched.add(d); }
   touched.forEach(d=>flush(d.id)); invalidateAll();
   const sample=[...touched][0]?.words.find(e=>norm(e.w)===k) || {w, img};
-  document.querySelectorAll(`[data-imgw="${CSS.escape(k)}"]`).forEach(el=>{ const tmp=document.createElement('div'); tmp.innerHTML=imageBlock(sample, el.dataset.ctl==='1', el.dataset.flat==='1'); el.replaceWith(tmp.firstElementChild||document.createTextNode('')); });
+  document.querySelectorAll(`[data-imgw="${CSS.escape(k)}"]`).forEach(el=>{ const tmp=document.createElement('div'); tmp.innerHTML=imageBlock(sample, el.dataset.ctl==='1', el.dataset.var||''); el.replaceWith(tmp.firstElementChild||document.createTextNode('')); });
 }
 async function setUserImage(w, file){
   if(!file || !/^image\//.test(file.type)){ toast('Hãy chọn một tệp ảnh (JPG, PNG, WebP).'); return; }
@@ -599,13 +605,14 @@ function hydrateUserImages(root=document){
   root.querySelectorAll?.('img[data-ukey]:not([src])').forEach(async im=>{ const u=await uimgURL(im.dataset.ukey); if(u) im.src=u; else im.closest('figure')?.classList.add('broken'); });
 }
 function liveImg(w){ const k=norm(w); for(const d of decks.values()) for(const x of d.words) if(norm(x.w)===k && x.img?.user) return x.img; return null; }
-function imageBlock(e, controls, flat=false){
+function imageBlock(e, controls, variant=''){
   if(!IMG_ON()) return '';
-  const k=norm(e.w), ctl=controls?'1':'0', W=esc(e.w), img=liveImg(e.w);
-  if(img) return `<figure class="wimg${flat?' flat':''}" data-imgw="${esc(k)}" data-ctl="${ctl}" data-flat="${flat?1:0}" data-uimgdrop="${W}"><img data-ukey="${esc(img.key)}" alt="Ảnh của bạn cho ${W}">
+  if(variant===true) variant='flat';
+  const k=norm(e.w), ctl=controls?'1':'0', W=esc(e.w), img=liveImg(e.w), vc=variant?' '+variant:'';
+  if(img) return `<figure class="wimg${vc}" data-imgw="${esc(k)}" data-ctl="${ctl}" data-var="${variant}" data-uimgdrop="${W}"><img data-ukey="${esc(img.key)}" alt="Ảnh của bạn cho ${W}">
     ${controls?`<figcaption><button type="button" class="wbtn" data-act="uimgadd" data-w="${W}">Đổi ảnh</button> · <button type="button" class="wbtn" data-act="uimgdel" data-w="${W}">Xoá ảnh</button></figcaption>`:''}</figure>`;
-  if(flat) return `<span hidden data-imgw="${esc(k)}" data-ctl="0" data-flat="1"></span>`;
-  return controls ? `<div class="wimgnone" data-imgw="${esc(k)}" data-ctl="${ctl}" data-uimgdrop="${W}"><button type="button" class="wbtn" data-act="uimgadd" data-w="${W}">+ Thêm ảnh</button> <span class="muted">hoặc kéo ảnh vào đây</span></div>` : '';
+  if(!controls) return `<span hidden data-imgw="${esc(k)}" data-ctl="0" data-var="${variant}"></span>`;
+  return `<div class="wimgnone${vc}" data-imgw="${esc(k)}" data-ctl="${ctl}" data-var="${variant}" data-uimgdrop="${W}"><button type="button" class="wbtn" data-act="uimgadd" data-w="${W}">+ Thêm ảnh</button> <span class="muted">hoặc kéo ảnh vào đây</span></div>`;
 }
 function exampleBlock(e){
   return `<div class="line exl"><span class="sym vd" title="ví dụ">VD</span><div class="exbox">
@@ -620,7 +627,6 @@ function detail(e, {withWord=false, viEdit=null, noEx=false}={}){
     ${(e.notes||[]).length?`<div class="line"><span class="sym root" title="gốc từ">( )</span><span class="rootnote">${e.notes.map(esc).join(' · ')}</span></div>`:''}
     ${e.vi?`<div class="line vi"><span class="sym vn" title="nghĩa tiếng Việt">VI</span><span class="vitext">${esc(e.vi)}</span></div>`:''}
     ${e.ex && !noEx?exampleBlock(e):''}
-    ${imageBlock(e, !!viEdit)}
   </div>`;
 }
 function doneScreen(title, big, sub){
@@ -679,13 +685,13 @@ function renderCards(){
   const e=C.queue[0], p=prog(d,e);
   const front = cardDir==='word'
     ? `<div class="facehead"><span class="tag">Từ vựng · nhớ lại nghĩa</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>
-       <div class="frontrow"><div class="frontword"><div class="bigword">${esc(e.w)}</div>${e.ipa?`<div class="ipa" style="margin-top:6px">/${esc(e.ipa)}/</div>`:''}</div>${imageBlock(e, false, true)}</div>
+       <div class="frontrow"><div class="frontword"><div class="bigword">${esc(e.w)}</div>${e.ipa?`<div class="ipa" style="margin-top:6px">/${esc(e.ipa)}/</div>`:''}</div>${imageBlock(e, false, 'flat')}</div>
        <div class="hint">Chạm vào thẻ để xem từ đồng nghĩa</div>`
     : `<div class="facehead"><span class="tag">Nghĩa · nhớ lại từ</span><span class="ipa" style="font-size:.9rem">${e.w.length} ký tự · bắt đầu bằng “${esc([...e.w][0])}”</span></div>
        ${detail(e,{noEx:true})}<div class="hint">Chạm vào thẻ để xem từ</div>`;
   const back = cardDir==='word'
-    ? `<div class="facehead"><span class="tag">${esc(e.w)}</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>${detail(e)}`
-    : `<div class="facehead"><span class="tag">Đáp án</span></div>${detail(e,{withWord:true})}`;
+    ? `<div class="facehead"><span class="tag">${esc(e.w)}</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>${imageBlock(e, false, 'top')}${detail(e)}`
+    : `<div class="facehead"><span class="tag">Đáp án</span></div>${detail(e,{withWord:true})}${imageBlock(e, false, '')}`;
   $('#stage').innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
     <div class="toolbar"><span class="count">Còn ${C.queue.length} thẻ${p?.seen?` · mức nhớ ${p.s}/5`:' · từ mới'}</span>
       <span class="seg" role="group" aria-label="Mặt trước của thẻ"><button data-act="dir" data-dir="word" aria-pressed="${cardDir==='word'}">Hiện từ</button><button data-act="dir" data-dir="mean" aria-pressed="${cardDir==='mean'}">Hiện nghĩa</button></span></div>
@@ -1054,7 +1060,8 @@ function renderList(){
     <div class="list">${rows.length?rows.map(e=>{ const p=prog(d,e), s=p?.s||0;
       const b=!p?.seen?'<span class="badge">Chưa học</span>':s>=4?'<span class="badge m">Đã thuộc</span>':'<span class="badge l">Đang học</span>';
       return `<article class="item"><div class="poscorner">${posEditor(e, e._d||d.id)}</div><div class="iw"><span class="w">${esc(e.w)}</span><span class="meta">${e.ipa?`<span class="ipa" style="font-size:.95rem">/${esc(e.ipa)}/</span>`:''}${speakBtn(e.w)}</span>
-        <span class="meta"><span class="pips" title="Mức nhớ ${s}/5">${[1,2,3,4,5].map(n=>`<i class="${n<=s?'on':''}"></i>`).join('')}</span>${b}</span></div>${detail(e,{viEdit:e._d||d.id})}</article>`; }).join(''):'<div class="empty">Không có từ nào khớp.</div>'}</div></div>`;
+        <span class="meta"><span class="pips" title="Mức nhớ ${s}/5">${[1,2,3,4,5].map(n=>`<i class="${n<=s?'on':''}"></i>`).join('')}</span>${b}</span>
+        ${imageBlock(e, true, 'side')}</div>${detail(e,{viEdit:e._d||d.id})}</article>`; }).join(''):'<div class="empty">Không có từ nào khớp.</div>'}</div></div>`;
   const inp=$('#listq');
   const ps=$('#posel');
   if(ps){ ps.focus({preventScroll:true}); ps.addEventListener('change',()=>savePOS(ps.dataset.k, ps.value)); ps.addEventListener('blur',()=>{ if(posEditKey){ setTimeout(()=>{ if(posEditKey===ps.dataset.k){ posEditKey=null; renderList(); } },150); } });
