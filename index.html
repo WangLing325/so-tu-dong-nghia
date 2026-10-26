@@ -253,9 +253,6 @@ select{appearance:auto}
 .pickrow{display:flex;gap:10px;align-items:flex-start}
 .pickrow input{width:18px;height:18px;margin-top:3px;accent-color:var(--ant);flex:none}
 .selbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);position:sticky;top:env(safe-area-inset-top,0px);z-index:2}
-.wdel{border:0;background:none;padding:2px 0;font-size:.78rem;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
-.wdel:hover{color:var(--ant)}
-.wdel.armed{color:var(--ant);font-weight:700}
 .editor{display:flex;flex-direction:column;gap:14px}
 .drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:var(--card)}
 .drop.over{border-color:var(--moss);background:var(--moss-soft)}
@@ -978,17 +975,6 @@ function matchPick(side,i){
 }
 
 /* ---------- 5. list ---------- */
-let wDelArmed=null;
-function deleteWord(k){
-  if(wDelArmed!==k){ wDelArmed=k; renderList(); return; }
-  wDelArmed=null;
-  const i=k.indexOf('::'), deck=decks.get(k.slice(0,i)), w=k.slice(i+2);
-  if(!deck){ renderList(); return; }
-  const idx=deck.words.findIndex(x=>norm(x.w)===w); if(idx<0){ renderList(); return; }
-  const [gone]=deck.words.splice(idx,1); delete deck.progress?.[w];
-  flush(deck.id); invalidateAll(); resetSessions(); renderDeckSel(); renderStats(); renderList();
-  toast(`Đã xoá “${gone.w}” khỏi “${deck.name}”.`);
-}
 let listQ='', resetArmed=false, viEditKey=null, posEditKey=null, posState={busy:false,msg:'',err:false};
 function posEditor(e, deckId){
   const k=viKey(deckId,e);
@@ -1098,8 +1084,7 @@ function renderList(){
     <div class="list">${rows.length?rows.map(e=>{ const p=prog(d,e), s=p?.s||0;
       const b=!p?.seen?'<span class="badge">Chưa học</span>':s>=4?'<span class="badge m">Đã thuộc</span>':'<span class="badge l">Đang học</span>';
       return `<article class="item"><div class="poscorner">${posEditor(e, e._d||d.id)}</div><div class="iw"><span class="w">${esc(e.w)}</span><span class="meta">${e.ipa?`<span class="ipa" style="font-size:.95rem">/${esc(e.ipa)}/</span>`:''}${speakBtn(e.w)}</span>
-        <span class="meta"><span class="pips" title="Mức nhớ ${s}/5">${[1,2,3,4,5].map(n=>`<i class="${n<=s?'on':''}"></i>`).join('')}</span>${b}</span>
-        <span class="meta"><button type="button" class="wdel ${wDelArmed===viKey(e._d||d.id,e)?'armed':''}" data-act="wdel" data-k="${esc(viKey(e._d||d.id,e))}">${wDelArmed===viKey(e._d||d.id,e)?'Bấm lần nữa để xoá từ':'Xoá từ'}</button></span></div>${detail(e,{viEdit:e._d||d.id})}</article>`; }).join(''):'<div class="empty">Không có từ nào khớp.</div>'}</div></div>`;
+        <span class="meta"><span class="pips" title="Mức nhớ ${s}/5">${[1,2,3,4,5].map(n=>`<i class="${n<=s?'on':''}"></i>`).join('')}</span>${b}</span></div>${detail(e,{viEdit:e._d||d.id})}</article>`; }).join(''):'<div class="empty">Không có từ nào khớp.</div>'}</div></div>`;
   const inp=$('#listq');
   const ps=$('#posel');
   if(ps){ ps.focus({preventScroll:true}); ps.addEventListener('change',()=>savePOS(ps.dataset.k, ps.value)); ps.addEventListener('blur',()=>{ if(posEditKey){ setTimeout(()=>{ if(posEditKey===ps.dataset.k){ posEditKey=null; renderList(); } },150); } });
@@ -1800,7 +1785,6 @@ const acts={
   selmode:()=>{ selMode=!selMode; selIds.clear(); selArmed=false; delArmed=null; renderDecks(); },
   selall:()=>{ const all=sortedDecks().map(d=>d.id); if(selIds.size===all.length) selIds.clear(); else all.forEach(i=>selIds.add(i)); selArmed=false; renderDecks(); },
   seldel:async()=>{ if(!selIds.size) return; if(!selArmed){ selArmed=true; return renderDecks(); } const ids=[...selIds]; selMode=false; selIds.clear(); selArmed=false; await deleteDecks(ids); },
-  wdel:b=>deleteWord(b.dataset.k),
   sfx:()=>{ sfxOn=!sfxOn; try{ localStorage.setItem('sotu.sfx', sfxOn?'1':'0'); }catch{} renderTabs(); renderMode(); if(sfxOn) sfx(true); },
   uimgadd:b=>pickUserImage(b.dataset.w),
   uimgdel:b=>removeUserImage(b.dataset.w),
