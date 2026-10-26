@@ -278,6 +278,18 @@ body.dragging .wrap{outline:2px dashed var(--moss);outline-offset:6px;border-rad
   background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:.9rem;transition:opacity .2s, transform .2s;max-width:calc(100% - 32px)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes pop{0%{transform:scale(1)}35%{transform:scale(1.045)}100%{transform:scale(1)}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes fly{to{transform:translate(var(--dx),var(--dy)) rotate(var(--r));opacity:0}}
+@keyframes floatup{0%{opacity:0;transform:translate(-50%,-20%)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-170%)}}
+.opt.right,.input.ok{animation:pop .38s ease}
+.opt.wrong,.input.no{animation:shake .22s 2}
+.opt.right .k{background:var(--moss);color:var(--moss-ink);border-color:var(--moss);font-weight:800}
+.opt.wrong .k{background:var(--ant);color:var(--card);border-color:var(--ant);font-weight:800}
+.verdict{animation:rise .3s ease both}
+.fxwrap{position:fixed;width:0;height:0;pointer-events:none;z-index:60}
+.fxp{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:2px;animation:fly .8s cubic-bezier(.15,.7,.3,1) forwards}
+.fxt{position:absolute;left:0;top:0;transform:translate(-50%,-50%);font-family:var(--f-body);font-weight:800;font-size:.95rem;color:var(--moss-ink);background:var(--moss);padding:4px 12px;border-radius:99px;white-space:nowrap;box-shadow:0 6px 16px -6px rgba(0,0,0,.35);animation:floatup 1s ease forwards}
 .shake{animation:shake .25s 2}
 
 @media (max-width:560px){
@@ -710,18 +722,62 @@ function renderQuiz(){
   $('#stage').innerHTML=`<div class="panel">
     <div class="toolbar"><span class="count">Câu ${Q.i+1}/${Q.list.length}</span><span class="count">Đúng ${Q.right}</span></div>
     <div><div class="qprompt">${qq.prompt}</div><div class="qcue ${qq.word?'word':''}">${qq.word?esc(qq.cue):`${qq.pre??'= '}${esc(qq.cue)}`}${qq.word&&canSpeak?' '+speakBtn(qq.cue):''}</div></div>
-    <div class="opts">${qq.opts.map((o,i)=>`<button class="opt ${a!=null?(o.ok?'right':(i===a?'wrong':'')):''}" data-act="ans" data-i="${i}" ${a!=null?'disabled':''}><span class="k">${i+1}</span><span class="t">${esc(o.label)}</span></button>`).join('')}</div>
+    <div class="opts">${qq.opts.map((o,i)=>`<button class="opt ${a!=null?(o.ok?'right':(i===a?'wrong':'')):''}" data-act="ans" data-i="${i}" ${a!=null?'disabled':''}><span class="k">${a!=null?(o.ok?'✓':(i===a?'✗':i+1)):i+1}</span><span class="t">${esc(o.label)}</span></button>`).join('')}</div>
     ${a!=null?`<div class="feedback"><div class="verdict ${qq.opts[a].ok?'ok':'no'}">${qq.opts[a].ok?'Chính xác.':'Chưa đúng. Ghi lại cả dòng này nhé:'}</div>${detail(qq.e,{withWord:true})}
       <div><button class="btn primary" data-act="nextq" id="nextq">Câu tiếp <kbd style="font-size:.75rem;opacity:.8">Enter</kbd></button></div></div>`:''}
-  </div><p class="keys" style="margin-top:12px"><kbd>1</kbd>–<kbd>4</kbd> chọn đáp án · <kbd>Enter</kbd> câu tiếp</p>`;
+  </div><p class="keys" style="margin-top:12px"><kbd>1</kbd>–<kbd>4</kbd> chọn đáp án · <kbd>Enter</kbd> câu tiếp ·${sfxBtn()}</p>`;
   if(a!=null) $('#nextq')?.focus({preventScroll:true});
 }
 function answerQuiz(i){
   if(!Q||Q.answered!=null) return;
   Q.answered=i; const ok=Q.q.opts[i].ok; if(ok) Q.right++;
   grade(Q.q.e, ok); renderQuiz();
+  fxAnswer(ok, `#stage .opt[data-i="${i}"]`);
 }
 function nextQuiz(){ Q.i++; Q.answered=null; if(Q.i<Q.list.length) Q.q=makeQ(Q.list[Q.i], cur().words); renderQuiz(); }
+
+/* ---------- answer effects: pop / shake, a small burst, a streak note and a short sound ---------- */
+let fxStreak=0, sfxOn=true, audioCtx=null;
+try{ sfxOn=localStorage.getItem('sotu.sfx')!=='0'; }catch{}
+const reducedMotion=()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch{ return false; } };
+function sfx(ok){
+  if(!sfxOn) return;
+  try{
+    audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
+    const t0=audioCtx.currentTime;
+    const notes = ok ? [[880,0],[1318.5,0.09]] : [[196,0],[164.8,0.1]];
+    for(const [f,dt] of notes){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type = ok ? 'sine' : 'triangle'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001, t0+dt); g.gain.exponentialRampToValueAtTime(ok?0.08:0.06, t0+dt+0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0+dt+(ok?0.22:0.2));
+      o.connect(g).connect(audioCtx.destination); o.start(t0+dt); o.stop(t0+dt+0.25);
+    }
+  }catch{}
+}
+function burst(el, label){
+  if(!el || reducedMotion()) return;
+  const r=el.getBoundingClientRect(); if(!r.width) return;
+  const wrap=document.createElement('div'); wrap.className='fxwrap';
+  wrap.style.left=(r.left+r.width/2)+'px'; wrap.style.top=(r.top+r.height/2)+'px';
+  const colors=['var(--moss)','var(--gold)','var(--ant)','var(--moss-soft)','var(--ink)'];
+  for(let i=0;i<14;i++){
+    const a=Math.random()*Math.PI*2, d=50+Math.random()*70, sp=document.createElement('span');
+    sp.className='fxp'; sp.style.background=colors[i%colors.length];
+    sp.style.setProperty('--dx', Math.cos(a)*d+'px'); sp.style.setProperty('--dy', (Math.sin(a)*d-20)+'px'); sp.style.setProperty('--r', (Math.random()*540-270)+'deg');
+    wrap.append(sp);
+  }
+  const t=document.createElement('span'); t.className='fxt'; t.textContent=label; wrap.append(t);
+  document.body.append(wrap); setTimeout(()=>wrap.remove(), 1000);
+}
+/* call right after the screen re-rendered the answer */
+function fxAnswer(ok, selector){
+  sfx(ok);
+  fxStreak = ok ? fxStreak+1 : 0;
+  if(!ok) return;
+  const el=document.querySelector(selector);
+  burst(el, fxStreak>=3 && fxStreak%3===0 ? `${fxStreak} câu đúng liên tiếp!` : '+1');
+}
+const sfxBtn = () => `<button type="button" class="wbtn" data-act="sfx" style="margin-left:6px">Âm thanh: ${sfxOn?'bật':'tắt'}</button>`;
 
 /* ---------- 2b. synonym drills: everything revolves around one headword's synonym group ---------- */
 let S=null;
@@ -774,7 +830,7 @@ function renderSyn(){
     if(q.done){ verdict=q.ok?'Chính xác, bạn chọn đủ cả nhóm.':'Chưa đúng hết. Nhóm đồng nghĩa đầy đủ:'; }
   } else if(q.t==='odd'){
     body=`<div><div class="qprompt">Từ nào KHÔNG cùng nghĩa với các từ còn lại?</div></div>
-      <div class="opts">${q.opts.map((o,i)=>`<button class="opt ${q.ans!=null?(o.ok?'right':(i===q.ans?'wrong':'')):''}" data-act="sodd" data-i="${i}" ${q.ans!=null?'disabled':''}><span class="k">${i+1}</span><span class="t">${esc(o.l)}</span></button>`).join('')}</div>`;
+      <div class="opts">${q.opts.map((o,i)=>`<button class="opt ${q.ans!=null?(o.ok?'right':(i===q.ans?'wrong':'')):''}" data-act="sodd" data-i="${i}" ${q.ans!=null?'disabled':''}><span class="k">${q.ans!=null?(o.ok?'✓':(i===q.ans?'✗':i+1)):i+1}</span><span class="t">${esc(o.l)}</span></button>`).join('')}</div>`;
     if(q.ans!=null){
       const o=q.opts.find(x=>x.ok), ok=q.opts[q.ans].ok, src=o.ant?null:ownerOf(o.l);
       verdict=ok?'Chính xác.':'Chưa đúng.';
@@ -784,7 +840,7 @@ function renderSyn(){
   } else if(q.t==='sort'){
     body=`<div><div class="qprompt">Hai từ này có quan hệ gì?</div>
       <div class="wordline" style="margin-top:6px;gap:14px"><span class="qcue word">${esc(e.w)}</span><span class="sym" style="color:var(--muted)">?</span><span class="qcue word" style="font-weight:500">${esc(q.l)}</span>${speakBtn(q.l)}</div></div>
-      <div class="opts">${[['syn','= Đồng nghĩa'],['ant','# Trái nghĩa']].map(([k,l],i)=>`<button class="opt ${q.ans!=null?(k===q.k?'right':(k===q.ans?'wrong':'')):''}" data-act="ssort" data-k="${k}" ${q.ans!=null?'disabled':''}><span class="k">${i+1}</span><span class="t">${l}</span></button>`).join('')}</div>`;
+      <div class="opts">${[['syn','= Đồng nghĩa'],['ant','# Trái nghĩa']].map(([k,l],i)=>`<button class="opt ${q.ans!=null?(k===q.k?'right':(k===q.ans?'wrong':'')):''}" data-act="ssort" data-k="${k}" ${q.ans!=null?'disabled':''}><span class="k">${q.ans!=null?(k===q.k?'✓':(k===q.ans?'✗':i+1)):i+1}</span><span class="t">${l}</span></button>`).join('')}</div>`;
     if(q.ans!=null){ verdict=q.ans===q.k?'Chính xác.':'Chưa đúng.'; note=`“${esc(q.l)}” là từ ${q.k==='syn'?'đồng nghĩa':'trái nghĩa'} của <b>${esc(e.w)}</b>.`; }
   } else {
     const syns=shortSyn(e);
@@ -799,12 +855,12 @@ function renderSyn(){
   $('#stage').innerHTML=`<div class="panel">${head}${body}
     ${answered?`<div class="feedback">${verdict?`<div class="verdict ${/^Chính xác/.test(verdict)?'ok':'no'}">${verdict}</div>`:''}${note?`<div>${note}</div>`:''}${detail(e,{withWord:true})}
       <div><button class="btn primary" data-act="snext" id="snext">Bài tiếp <kbd style="font-size:.75rem;opacity:.8">Enter</kbd></button></div></div>`:''}
-  </div><p class="keys" style="margin-top:12px"><kbd>1</kbd>–<kbd>${q.t==='sort'?2:q.t==='pick'?q.opts.length:4}</kbd> chọn · <kbd>Enter</kbd> ${q.t==='pick'&&!answered?'kiểm tra':'bài tiếp'}</p>`;
+  </div><p class="keys" style="margin-top:12px"><kbd>1</kbd>–<kbd>${q.t==='sort'?2:q.t==='pick'?q.opts.length:4}</kbd> chọn · <kbd>Enter</kbd> ${q.t==='pick'&&!answered?'kiểm tra':'bài tiếp'} ·${sfxBtn()}</p>`;
   if(q.t==='recall' && !q.res){ $('#synform').addEventListener('submit',ev=>{ ev.preventDefault(); synRecall(); }); $('#synin').addEventListener('input',ev=>{ q.val=ev.target.value; }); $('#synin').focus({preventScroll:true}); }
   else if(q.t==='recall') $('#synform').addEventListener('submit',ev=>ev.preventDefault());
   if(answered) $('#snext')?.focus({preventScroll:true});
 }
-function synScore(ok, neutral=false){ if(ok && !neutral) S.right++; grade(S.q.e, ok, neutral); renderSyn(); }
+function synScore(ok, neutral=false){ if(ok && !neutral) S.right++; grade(S.q.e, ok, neutral); renderSyn(); fxAnswer(ok, '#stage .opt.right, #stage .input.ok, #stage .verdict'); }
 function synPick(i){ const q=S.q; if(q.done) return; q.sel.has(i)?q.sel.delete(i):q.sel.add(i); renderSyn(); }
 function synCheck(){ const q=S.q; if(q.t!=='pick'||q.done||!q.sel.size) return; q.done=true; q.ok=q.opts.every((o,i)=>(o.k==='syn')===q.sel.has(i)); synScore(q.ok); }
 function synOdd(i){ const q=S.q; if(q.ans!=null) return; q.ans=i; synScore(q.opts[i].ok); }
@@ -851,8 +907,9 @@ function checkType(){
   T.res={ok};
   if(ok && T.hints<=1) T.right++;
   grade(e, ok, ok && T.hints>1);
-  if(ok) speak(e.w);
   renderType();
+  fxAnswer(ok, '#typein');
+  if(ok) setTimeout(()=>speak(e.w), sfxOn?320:0);
 }
 
 /* ---------- 4. matching ---------- */
@@ -877,9 +934,13 @@ function matchPick(side,i){
   M.bad=null;
   if(M.selL!=null && M.selR!=null){
     const l=M.selL, r=M.selR, e=M.words[l];
-    if(M.right[r]===l){ M.done.add(l); grade(e, !M.missed.has(l)); if(M.done.size===M.words.length) M.end=Date.now(); }
-    else { M.missed.add(l); grade(e,false); M.bad={l,r}; setTimeout(()=>{ if(M&&M.bad){ M.bad=null; renderMatch(); } },650); }
+    let ok=null;
+    if(M.right[r]===l){ M.done.add(l); grade(e, !M.missed.has(l)); if(M.done.size===M.words.length) M.end=Date.now(); ok=true; }
+    else { M.missed.add(l); grade(e,false); M.bad={l,r}; setTimeout(()=>{ if(M&&M.bad){ M.bad=null; renderMatch(); } },650); ok=false; }
     M.selL=M.selR=null;
+    renderMatch();
+    fxAnswer(ok, `#stage .tile.s[data-i="${r}"]`);
+    return;
   }
   renderMatch();
 }
@@ -1701,6 +1762,7 @@ const acts={
   selall:()=>{ const all=sortedDecks().map(d=>d.id); if(selIds.size===all.length) selIds.clear(); else all.forEach(i=>selIds.add(i)); selArmed=false; renderDecks(); },
   seldel:async()=>{ if(!selIds.size) return; if(!selArmed){ selArmed=true; return renderDecks(); } const ids=[...selIds]; selMode=false; selIds.clear(); selArmed=false; await deleteDecks(ids); },
   wdel:b=>deleteWord(b.dataset.k),
+  sfx:()=>{ sfxOn=!sfxOn; try{ localStorage.setItem('sotu.sfx', sfxOn?'1':'0'); }catch{} renderMode(); if(sfxOn) sfx(true); },
   uimgadd:b=>pickUserImage(b.dataset.w),
   uimgdel:b=>removeUserImage(b.dataset.w),
   save:()=>saveDeck(),
