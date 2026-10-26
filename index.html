@@ -128,8 +128,11 @@ select{appearance:auto}
 .wimg img{width:100%;max-width:260px;height:170px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--rule);display:block}
 .wimg figcaption{font-size:.74rem;color:var(--muted);line-height:1.5}
 .wimg.broken{display:none}
-.wimg.flat{margin-left:0;max-width:300px}
-.wimg.flat img{max-width:300px;height:190px}
+.frontrow{flex:1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center;align-content:center}
+.frontword{min-width:0}
+.wimg.flat{margin:0;width:min(320px,40vw);max-width:none}
+.wimg.flat img{width:100%;max-width:none;height:210px}
+@media (max-width:560px){ .frontrow{grid-template-columns:1fr;gap:14px} .wimg.flat{width:100%} .wimg.flat img{height:180px} }
 .wimgnone{margin-left:calc(1.9em + 10px);font-size:.78rem;padding:6px 10px;border:1px dashed var(--line);border-radius:8px;width:fit-content;max-width:100%}
 .wbtn{border:0;background:none;padding:0;font:inherit;font-size:.78rem;color:var(--moss);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .wbtn:hover{color:var(--ink)}
@@ -650,8 +653,7 @@ function renderCards(){
   const e=C.queue[0], p=prog(d,e);
   const front = cardDir==='word'
     ? `<div class="facehead"><span class="tag">Từ vựng · nhớ lại nghĩa</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>
-       <div><div class="bigword">${esc(e.w)}</div>${e.ipa?`<div class="ipa" style="margin-top:6px">/${esc(e.ipa)}/</div>`:''}</div>
-       ${imageBlock(e, false, true)}
+       <div class="frontrow"><div class="frontword"><div class="bigword">${esc(e.w)}</div>${e.ipa?`<div class="ipa" style="margin-top:6px">/${esc(e.ipa)}/</div>`:''}</div>${imageBlock(e, false, true)}</div>
        <div class="hint">Chạm vào thẻ để xem từ đồng nghĩa</div>`
     : `<div class="facehead"><span class="tag">Nghĩa · nhớ lại từ</span><span class="ipa" style="font-size:.9rem">${e.w.length} ký tự · bắt đầu bằng “${esc([...e.w][0])}”</span></div>
        ${detail(e)}<div class="hint">Chạm vào thẻ để xem từ</div>`;
