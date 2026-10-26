@@ -54,7 +54,7 @@ Sau khi đọc ảnh, ứng dụng **tự động**:
 
 Thường mất 10–60 giây. Nếu có chữ đọc sai, sửa ở tab **Bài học → Sửa**. Nghĩa tiếng Việt và từ loại sửa trực tiếp được trong tab **Danh sách**.
 
-**Ảnh của bạn:** trong tab **Danh sách**, mỗi từ có ô **+ Thêm ảnh**. Bấm để chọn ảnh từ máy, hoặc kéo thả ảnh vào ô đó. Ảnh được thu nhỏ, lưu trong trình duyệt, hiện cả ở mặt sau thẻ ghi nhớ; có **Đổi ảnh / Xoá ảnh**, và được đưa vào tệp *Sao lưu*.
+**Ảnh của bạn:** trong tab **Danh sách**, mỗi từ có ô **+ Thêm ảnh**. Bấm để chọn ảnh từ máy, hoặc kéo thả ảnh vào ô đó. Ảnh được thu nhỏ, lưu trong trình duyệt, hiện cả ở hai mặt thẻ ghi nhớ; có **Đổi ảnh / Xoá ảnh**, và được đưa vào tệp *Sao lưu*.
 
 ### Bước 5 · Học từ mới theo danh sách chủ đề
 Mỗi lần đưa ảnh vào là một **bài**. Nên đặt tên bài theo unit hoặc chủ đề trong sách (ví dụ *Unit 3 – The environment*) để học theo từng chủ đề. Chọn bài ở ô **Bài đang học**, hoặc chọn **★ Tất cả từ đã lưu** để ôn trộn mọi chủ đề.

@@ -128,6 +128,8 @@ select{appearance:auto}
 .wimg img{width:100%;max-width:260px;height:170px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--rule);display:block}
 .wimg figcaption{font-size:.74rem;color:var(--muted);line-height:1.5}
 .wimg.broken{display:none}
+.wimg.flat{margin-left:0;max-width:300px}
+.wimg.flat img{max-width:300px;height:190px}
 .wimgnone{margin-left:calc(1.9em + 10px);font-size:.78rem;padding:6px 10px;border:1px dashed var(--line);border-radius:8px;width:fit-content;max-width:100%}
 .wbtn{border:0;background:none;padding:0;font:inherit;font-size:.78rem;color:var(--moss);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .wbtn:hover{color:var(--ink)}
@@ -559,7 +561,7 @@ function setImage(w, img){
   for(const d of decks.values()) for(const e of d.words) if(norm(e.w)===k){ if(img===undefined) delete e.img; else e.img=img; touched.add(d); }
   touched.forEach(d=>flush(d.id)); invalidateAll();
   const sample=[...touched][0]?.words.find(e=>norm(e.w)===k) || {w, img};
-  document.querySelectorAll(`[data-imgw="${CSS.escape(k)}"]`).forEach(el=>{ const tmp=document.createElement('div'); tmp.innerHTML=imageBlock(sample, el.dataset.ctl==='1'); el.replaceWith(tmp.firstElementChild||document.createTextNode('')); });
+  document.querySelectorAll(`[data-imgw="${CSS.escape(k)}"]`).forEach(el=>{ const tmp=document.createElement('div'); tmp.innerHTML=imageBlock(sample, el.dataset.ctl==='1', el.dataset.flat==='1'); el.replaceWith(tmp.firstElementChild||document.createTextNode('')); });
 }
 async function setUserImage(w, file){
   if(!file || !/^image\//.test(file.type)){ toast('Hãy chọn một tệp ảnh (JPG, PNG, WebP).'); return; }
@@ -582,11 +584,13 @@ function pickUserImage(w){ const inp=$('#uimgin'); if(!inp) return; inp.value=''
 function hydrateUserImages(root=document){
   root.querySelectorAll?.('img[data-ukey]:not([src])').forEach(async im=>{ const u=await uimgURL(im.dataset.ukey); if(u) im.src=u; else im.closest('figure')?.classList.add('broken'); });
 }
-function imageBlock(e, controls){
+function liveImg(w){ const k=norm(w); for(const d of decks.values()) for(const x of d.words) if(norm(x.w)===k && x.img?.user) return x.img; return null; }
+function imageBlock(e, controls, flat=false){
   if(!IMG_ON()) return '';
-  const k=norm(e.w), ctl=controls?'1':'0', W=esc(e.w);
-  if(e.img?.user) return `<figure class="wimg" data-imgw="${esc(k)}" data-ctl="${ctl}" data-uimgdrop="${W}"><img data-ukey="${esc(e.img.key)}" alt="Ảnh của bạn cho ${W}">
+  const k=norm(e.w), ctl=controls?'1':'0', W=esc(e.w), img=liveImg(e.w);
+  if(img) return `<figure class="wimg${flat?' flat':''}" data-imgw="${esc(k)}" data-ctl="${ctl}" data-flat="${flat?1:0}" data-uimgdrop="${W}"><img data-ukey="${esc(img.key)}" alt="Ảnh của bạn cho ${W}">
     ${controls?`<figcaption><button type="button" class="wbtn" data-act="uimgadd" data-w="${W}">Đổi ảnh</button> · <button type="button" class="wbtn" data-act="uimgdel" data-w="${W}">Xoá ảnh</button></figcaption>`:''}</figure>`;
+  if(flat) return `<span hidden data-imgw="${esc(k)}" data-ctl="0" data-flat="1"></span>`;
   return controls ? `<div class="wimgnone" data-imgw="${esc(k)}" data-ctl="${ctl}" data-uimgdrop="${W}"><button type="button" class="wbtn" data-act="uimgadd" data-w="${W}">+ Thêm ảnh</button> <span class="muted">hoặc kéo ảnh vào đây</span></div>` : '';
 }
 function exampleBlock(e){
@@ -647,6 +651,7 @@ function renderCards(){
   const front = cardDir==='word'
     ? `<div class="facehead"><span class="tag">Từ vựng · nhớ lại nghĩa</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>
        <div><div class="bigword">${esc(e.w)}</div>${e.ipa?`<div class="ipa" style="margin-top:6px">/${esc(e.ipa)}/</div>`:''}</div>
+       ${imageBlock(e, false, true)}
        <div class="hint">Chạm vào thẻ để xem từ đồng nghĩa</div>`
     : `<div class="facehead"><span class="tag">Nghĩa · nhớ lại từ</span><span class="ipa" style="font-size:.9rem">${e.w.length} ký tự · bắt đầu bằng “${esc([...e.w][0])}”</span></div>
        ${detail(e)}<div class="hint">Chạm vào thẻ để xem từ</div>`;
