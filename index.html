@@ -137,9 +137,10 @@ select{appearance:auto}
 .wimg.broken{display:none}
 .frontrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center}
 .frontword{min-width:0}
-.wimg.flat{margin:0;width:min(320px,40vw);max-width:none}
+.wimg.flat{margin:0;width:min(320px,40vw);max-width:none;align-self:start}
+.frontrow.back{align-items:start}
 .wimg.flat img{width:100%;max-width:none;height:210px}
-@media (max-width:560px){ .frontrow{grid-template-columns:1fr;gap:14px} .wimg.flat{width:100%} .wimg.flat img{height:180px} }
+@media (max-width:560px){ .frontrow{grid-template-columns:1fr;gap:14px} .wimg.flat{width:100%;order:-1} .wimg.flat img{height:180px} }
 .wimg.side{margin:8px 0 0;max-width:200px}
 .wimg.side img{max-width:200px;height:130px}
 .wimgnone.side{margin:8px 0 0}
@@ -690,8 +691,8 @@ function renderCards(){
     : `<div class="facehead"><span class="tag">Nghĩa · nhớ lại từ</span><span class="ipa" style="font-size:.9rem">${e.w.length} ký tự · bắt đầu bằng “${esc([...e.w][0])}”</span></div>
        <div class="frontrow"><div class="frontword">${detail(e,{noEx:true})}</div>${imageBlock(e, false, 'flat')}</div><div class="hint">Chạm vào thẻ để xem từ</div>`;
   const back = cardDir==='word'
-    ? `<div class="facehead"><span class="tag">${esc(e.w)}</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div>${imageBlock(e, false, 'top')}${detail(e)}`
-    : `<div class="facehead"><span class="tag">Đáp án</span></div>${imageBlock(e, false, 'top')}${detail(e,{withWord:true})}`;
+    ? `<div class="facehead"><span class="tag">${esc(e.w)}</span><span class="headr">${posBadge(e)}${speakBtn(e.w)}</span></div><div class="frontrow back"><div class="frontword">${detail(e)}</div>${imageBlock(e, false, 'flat')}</div>`
+    : `<div class="facehead"><span class="tag">Đáp án</span></div><div class="frontrow back"><div class="frontword">${detail(e,{withWord:true})}</div>${imageBlock(e, false, 'flat')}</div>`;
   $('#stage').innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
     <div class="toolbar"><span class="count">Còn ${C.queue.length} thẻ${p?.seen?` · mức nhớ ${p.s}/5`:' · từ mới'}</span>
       <span class="seg" role="group" aria-label="Mặt trước của thẻ"><button data-act="dir" data-dir="word" aria-pressed="${cardDir==='word'}">Hiện từ</button><button data-act="dir" data-dir="mean" aria-pressed="${cardDir==='mean'}">Hiện nghĩa</button></span></div>
