@@ -128,7 +128,7 @@ Mỗi máy giữ dữ liệu riêng. Muốn bài, ảnh và tiến độ tự gi
 2. **Tạo mã truy cập:** mở [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new):
    - đặt tên tùy ý, chọn thời hạn dài nhất;
    - **Repository access** → **Only select repositories** → `so-tu-data`;
-   - **Permissions** → **Contents** → **Read and write**;
+   - **Permissions** → bấm **Add permissions** → tích **Contents** → đổi quyền của Contents thành **Read and write** (để nguyên Metadata: Read-only);
    - bấm **Generate token** và sao chép mã (bắt đầu bằng `github_pat_`).
 3. Trong ứng dụng, vào tab **Bài học** → **Đồng bộ giữa máy tính và điện thoại**, dán mã, bấm **Kết nối**.
 4. Trên điện thoại, mở ứng dụng ở màn hình chính, làm lại bước 2 và 3.
