@@ -428,7 +428,66 @@ const shuffle = a => { a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.ran
 const uid = () => 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 const SPEAK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 const canSpeak = 'speechSynthesis' in window;
-function speak(t){ try{ const u=new SpeechSynthesisUtterance(t); u.lang='en-US'; u.rate=.9; speechSynthesis.cancel(); speechSynthesis.speak(u); }catch{} }
+/* English voice: phones whose system language is not English (e.g. Vietnamese) read with their default voice unless an
+   English voice is picked explicitly. Pick the best English voice, let the user choose, fall back to Google's voice online. */
+const NOVELTY_VOICE=/albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|\bfred\b|junior|kathy|ralph|grandma|grandpa|rocko|shelley|\bflo\b|sandy|\breed\b|\beddy\b/i;
+let voicePref=''; try{ voicePref=localStorage.getItem('sotu.voice')||''; }catch{}
+const ONLINE_TTS = () => IS_LOCAL && /^https?:$/.test(location.protocol);
+function enVoices(){ let v=[]; try{ v=canSpeak?speechSynthesis.getVoices():[]; }catch{} return v.filter(x=>/^en([-_]|$)/i.test(x.lang||'')); }
+function voiceScore(x){
+  const n=(x.name||'')+' '+(x.voiceURI||''); let s=0;
+  if(NOVELTY_VOICE.test(x.name||'')) s-=100;
+  if(/eloquence/i.test(x.voiceURI||'')) s-=30;
+  s += /^en[-_]US/i.test(x.lang) ? 6 : /^en[-_]GB/i.test(x.lang) ? 5 : 2;
+  if(/premium/i.test(n)) s+=8; if(/enhanced|natural|neural|online/i.test(n)) s+=6;
+  if(/samantha|daniel|aria|jenny|\bguy\b|google us english|google uk english/i.test(n)) s+=4;
+  if(/karen|moira|tessa|serena|arthur|\bava\b|allison|susan|\btom\b|nicky|zoe|evan|joelle|nathan|noelle/i.test(n)) s+=2;
+  return s;
+}
+const rankedVoices = () => enVoices().sort((a,b)=>voiceScore(b)-voiceScore(a));
+function bestVoice(){
+  const vs=rankedVoices();
+  if(voicePref && voicePref!=='google'){ const f=vs.find(v=>v.voiceURI===voicePref || v.name===voicePref); if(f) return f; }
+  return vs[0]||null;
+}
+if(canSpeak){ try{ speechSynthesis.getVoices(); speechSynthesis.addEventListener?.('voiceschanged',()=>{ if(mode==='decks') document.querySelector('#voicebox') && refreshVoiceBox(); }); }catch{} }
+let ttsAudio=null;
+function speakOnline(t){
+  try{ if(!ttsAudio) ttsAudio=new Audio(); ttsAudio.pause(); ttsAudio.src='https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q='+encodeURIComponent(String(t).slice(0,190)); return ttsAudio.play(); }
+  catch(e){ return Promise.reject(e); }
+}
+function speakLocal(t){
+  if(!canSpeak) return;
+  try{
+    const u=new SpeechSynthesisUtterance(t), v=bestVoice();
+    if(v){ u.voice=v; u.lang=v.lang; } else u.lang='en-US';
+    u.rate=.9;
+    const go=()=>speechSynthesis.speak(u);
+    if(speechSynthesis.speaking || speechSynthesis.pending){ speechSynthesis.cancel(); setTimeout(go,60); } else go();
+  }catch{}
+}
+function speak(t){
+  if(!t) return;
+  if(ONLINE_TTS() && (voicePref==='google' || !bestVoice())){ speakOnline(t).catch(()=>speakLocal(t)); return; }
+  speakLocal(t);
+}
+function voicePanel(){
+  if(!canSpeak && !ONLINE_TTS()) return '';
+  const vs=rankedVoices().filter(v=>!NOVELTY_VOICE.test(v.name||''));
+  const auto=bestVoice();
+  const label = voicePref==='google' ? 'giọng Google (cần mạng)' : auto ? esc(auto.name)+' · '+esc(auto.lang) : (ONLINE_TTS()?'giọng Google (máy không có giọng tiếng Anh)':'giọng mặc định');
+  return `<details class="fmt" id="voicebox"><summary><b>Giọng đọc tiếng Anh</b> <span class="muted">· ${label}</span></summary>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      <label style="display:flex;flex-direction:column;gap:4px" for="voicesel"><span class="label">Chọn giọng</span>
+        <select id="voicesel"><option value="">Tự chọn giọng tiếng Anh tốt nhất${!voicePref&&auto?` (${esc(auto.name)})`:''}</option>
+        ${ONLINE_TTS()?`<option value="google" ${voicePref==='google'?'selected':''}>Giọng Google (cần mạng)</option>`:''}
+        ${vs.map(v=>`<option value="${esc(v.voiceURI||v.name)}" ${voicePref===(v.voiceURI||v.name)?'selected':''}>${esc(v.name)} · ${esc(v.lang)}</option>`).join('')}</select></label>
+      <div class="row-btns"><button class="btn small" data-act="voicetest">Nghe thử</button></div>
+      <p class="muted" style="margin:0;font-size:.82rem">Trên iPhone, muốn giọng hay hơn: vào Cài đặt → Trợ năng → Nội dung được đọc → Giọng nói → Tiếng Anh, tải giọng Samantha hoặc Ava (Nâng cao), rồi chọn ở đây.</p>
+    </div></details>`;
+}
+function refreshVoiceBox(){ const box=$('#voicebox'); if(!box) return; const open=box.open, tmp=document.createElement('div'); tmp.innerHTML=voicePanel(); const nb=tmp.firstElementChild; if(!nb) return; box.replaceWith(nb); if(open) nb.setAttribute('open',''); bindVoiceBox(); }
+function bindVoiceBox(){ $('#voicesel')?.addEventListener('change',ev=>{ voicePref=ev.target.value; try{ localStorage.setItem('sotu.voice',voicePref); }catch{} refreshVoiceBox(); speak('Hello, this is how words will sound.'); }); }
 const speakBtn = w => canSpeak ? `<button class="speak" data-act="speak" data-w="${esc(w)}" aria-label="Nghe phát âm ${esc(w)}" title="Nghe phát âm">${SPEAK_SVG}</button>` : '';
 let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), Math.min(14000, 2600+String(msg).length*45)); }
 
@@ -1332,6 +1391,7 @@ function renderDecks(){
         <button class="btn small ${delArmed===d.id?'warn':''}" data-act="del" data-id="${esc(d.id)}">${delArmed===d.id?'Bấm lần nữa để xoá':'Xoá'}</button></div></div>`; }).join('')}</div>
     <div class="toolbar"><span>${store.kind==='db'?'Bài và tiến độ được lưu riêng cho tài khoản của bạn.':(IS_LOCAL?'Bài và tiến độ lưu trên máy này. Nên sao lưu ra tệp thỉnh thoảng.':'Bài và tiến độ đang lưu trong trình duyệt này.')}</span>
       <span class="row-btns">${IS_LOCAL && /^https?:$/.test(location.protocol)?'<button class="btn small" data-act="intro">Xem lại phần giới thiệu</button>':''}<button class="btn small" data-act="backup">Sao lưu ra tệp</button><label class="btn small" for="restorein" style="cursor:pointer">Khôi phục từ tệp</label><input type="file" id="restorein" accept="application/json,.json" hidden></span></div>
+    ${voicePanel()}
     ${syncPanel()}</section>
 
    <section class="editor"><h2 style="font-size:1.25rem">${E.id?`Sửa bài: ${esc(decks.get(E.id)?.name||'')}`:'Thêm bài mới'}</h2>
@@ -1366,6 +1426,7 @@ function renderDecks(){
         <li>Định nghĩa bắt đầu bằng a / an / the được giữ nguyên cả câu. Muốn giữ dấu phẩy trong một nghĩa khác thì đặt nó trong "ngoặc kép".</li>
       </ul></div>
    </section></div>`;
+  bindVoiceBox();
   $('#ename').addEventListener('input',ev=>{ E.name=ev.target.value; });
   $('#etext').addEventListener('input',ev=>{ E.text=ev.target.value; const p=parseText(E.text); $('#pcount').innerHTML=`<span>Đọc được <b>${p.entries.length}</b> từ</span>${p.bad.length?`<span style="color:var(--ant)">Dòng ${p.bad.slice(0,8).join(', ')}${p.bad.length>8?'…':''} chưa đúng định dạng (thiếu dấu =)</span>`:''}`; });
   document.querySelectorAll('[data-sel]').forEach(cb=>cb.addEventListener('change',()=>{ const id=cb.dataset.sel; cb.checked?selIds.add(id):selIds.delete(id); selArmed=false; renderDecks(); }));
@@ -2066,6 +2127,7 @@ const acts={
   intro:()=>showIntro(),
   gemsave:()=>geminiSave(),
   syncconnect:()=>syncConnect(),
+  voicetest:()=>speak('Hello, this is how words will sound. Solitary, occupy, vulnerable.'),
   syncnow:()=>syncNow(true),
   syncoff:()=>{ syncCfg={}; saveSyncCfg(); syncState.msg='Đã tắt đồng bộ trên máy này. Dữ liệu trên máy vẫn giữ nguyên.'; syncState.err=false; renderDecks(); $('#syncbox')?.setAttribute('open',''); },
   gappcopy:b=>copyGeminiPrompt(b),
