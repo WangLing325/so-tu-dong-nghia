@@ -121,6 +121,20 @@ Sau khi cài, ứng dụng có biểu tượng riêng và vẫn học được k
 - Dùng **Sao lưu ra tệp** (tab Bài học) để giữ bản dự phòng; kéo tệp `.json` đó vào ứng dụng để khôi phục hoặc chuyển sang máy khác.
 - Khóa API Gemini (nếu dùng) chỉ lưu trong trình duyệt của bạn.
 
+## Đồng bộ máy tính và điện thoại
+Mỗi máy giữ dữ liệu riêng. Muốn bài, ảnh và tiến độ tự giống nhau trên mọi máy, bật **Đồng bộ** một lần trên mỗi máy (làm trên máy tính trước):
+
+1. **Tạo kho riêng tư:** mở [github.com/new](https://github.com/new), đặt tên `so-tu-data`, chọn **Private**, bấm **Create repository**.
+2. **Tạo mã truy cập:** mở [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new):
+   - đặt tên tùy ý, chọn thời hạn dài nhất;
+   - **Repository access** → **Only select repositories** → `so-tu-data`;
+   - **Permissions** → **Contents** → **Read and write**;
+   - bấm **Generate token** và sao chép mã (bắt đầu bằng `github_pat_`).
+3. Trong ứng dụng, vào tab **Bài học** → **Đồng bộ giữa máy tính và điện thoại**, dán mã, bấm **Kết nối**.
+4. Trên điện thoại, mở ứng dụng ở màn hình chính, làm lại bước 2 và 3.
+
+Sau đó ứng dụng tự đồng bộ khi mở và vài giây sau mỗi thay đổi. Nếu cùng một bài được sửa trên hai máy, bản sửa sau cùng được giữ; tiến độ học luôn được gộp. Mã chỉ lưu trên máy của bạn và chỉ mở được đúng kho `so-tu-data`.
+
 ## Mã nguồn bên thứ ba
 - Phiên âm: CMU Pronouncing Dictionary (Carnegie Mellon University), chuyển sang IPA; gói `cmu-pronouncing-dictionary` (ISC), xem `ipa-dict-LICENSE.txt`.
 - Đọc chữ: tesseract.js (Apache-2.0), tải từ jsDelivr khi dùng.

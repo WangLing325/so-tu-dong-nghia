@@ -561,7 +561,7 @@ const store = {
     return this.local();
   },
   async put(d){
-    const body={name:d.name, words:d.words, progress:d.progress||{}, created:d.created||Date.now()};
+    const body={name:d.name, words:d.words, progress:d.progress||{}, created:d.created||Date.now(), cm:d.cm||0};
     if(d.deleted) body.deleted=true;
     if(this.kind==='db') return this.col.doc(d.id).set(body);
     try{ const all=this.local(); const i=all.findIndex(x=>x.id===d.id); const rec={id:d.id,...body}; if(i>=0) all[i]=rec; else all.push(rec); localStorage.setItem('sotu.decks',JSON.stringify(all)); }catch{}
@@ -577,16 +577,21 @@ async function flush(id){
   if(saving[id]){ saving[id].again=true; return; }
   const d=decks.get(id); if(!d) return;
   saving[id]={again:false};
+  const sig=deckSig(d); if(d._sig!==sig){ d.cm=Date.now(); d._sig=sig; }
   try{ await store.put(d); }
   catch(e){ toast(e?.code==='quota_exceeded' ? 'Hết dung lượng lưu. Hãy xoá bớt bài cũ.' : 'Chưa lưu được tiến độ. Sẽ thử lại ở lần trả lời sau.'); }
   const again=saving[id].again; delete saving[id];
   if(again) flush(id);
+  else if(quietFlush.has(id)) quietFlush.delete(id); else scheduleSync();
 }
+function deckSig(d){ return JSON.stringify([d.name, d.words]); }
+const quietFlush=new Set();
 
 /* ---------- state ---------- */
 const BUILTIN_ID='mau-kakapo';
 const decks=new Map();
-decks.set(BUILTIN_ID,{id:BUILTIN_ID, name:'Kākāpō (bài mẫu)', words:parseText(BUILTIN_TEXT).entries, progress:{}, builtin:true, created:0});
+decks.set(BUILTIN_ID,{id:BUILTIN_ID, name:'Kākāpō (bài mẫu)', words:parseText(BUILTIN_TEXT).entries, progress:{}, builtin:true, created:0, cm:0});
+decks.get(BUILTIN_ID)._sig=deckSig(decks.get(BUILTIN_ID));
 const MODES=[['list','Danh sách'],['cards','Thẻ ghi nhớ'],['quiz','Trắc nghiệm'],['syn','Bài tập đồng nghĩa'],['type','Gõ từ'],['match','Ghép cặp'],['decks','Bài học']];
 let curId=BUILTIN_ID, mode='cards';
 try{ const s=JSON.parse(localStorage.getItem('sotu.ui')||'{}'); if(s.mode && MODES.some(m=>m[0]===s.mode)) mode=s.mode; if(s.cur) curId=s.cur; }catch{}
@@ -1252,14 +1257,14 @@ async function deleteDecks(ids){
   let failed=0;
   for(const id of ids){
     if(!decks.has(id)) continue;
-    decks.delete(id);
+    decks.delete(id); tombs[id]=Date.now(); saveTombs();
     if(E?.id===id) newEditor(null);
     try{
       if(id===BUILTIN_ID) await store.put({id, name:'(đã xoá)', words:[], progress:{}, created:0, deleted:true});
       else await store.del(id);
     }catch{ failed++; }
   }
-  invalidateAll(); validCur(); resetSessions(); saveUI(); renderAll();
+  invalidateAll(); validCur(); resetSessions(); saveUI(); renderAll(); scheduleSync(1500);
   toast(failed ? `Chưa xoá được ${failed} bài trên bộ lưu. Thử lại sau.` : names.length===1 ? `Đã xoá “${names[0]}”.` : `Đã xoá ${names.length} bài.`);
 }
 let engKind=null, gemState={busy:false,msg:'',err:false,models:[]};
@@ -1326,7 +1331,8 @@ function renderDecks(){
         <button class="btn small" data-act="edit" data-id="${esc(d.id)}">Sửa</button>
         <button class="btn small ${delArmed===d.id?'warn':''}" data-act="del" data-id="${esc(d.id)}">${delArmed===d.id?'Bấm lần nữa để xoá':'Xoá'}</button></div></div>`; }).join('')}</div>
     <div class="toolbar"><span>${store.kind==='db'?'Bài và tiến độ được lưu riêng cho tài khoản của bạn.':(IS_LOCAL?'Bài và tiến độ lưu trên máy này. Nên sao lưu ra tệp thỉnh thoảng.':'Bài và tiến độ đang lưu trong trình duyệt này.')}</span>
-      <span class="row-btns">${IS_LOCAL && /^https?:$/.test(location.protocol)?'<button class="btn small" data-act="intro">Xem lại phần giới thiệu</button>':''}<button class="btn small" data-act="backup">Sao lưu ra tệp</button><label class="btn small" for="restorein" style="cursor:pointer">Khôi phục từ tệp</label><input type="file" id="restorein" accept="application/json,.json" hidden></span></div></section>
+      <span class="row-btns">${IS_LOCAL && /^https?:$/.test(location.protocol)?'<button class="btn small" data-act="intro">Xem lại phần giới thiệu</button>':''}<button class="btn small" data-act="backup">Sao lưu ra tệp</button><label class="btn small" for="restorein" style="cursor:pointer">Khôi phục từ tệp</label><input type="file" id="restorein" accept="application/json,.json" hidden></span></div>
+    ${syncPanel()}</section>
 
    <section class="editor"><h2 style="font-size:1.25rem">${E.id?`Sửa bài: ${esc(decks.get(E.id)?.name||'')}`:'Thêm bài mới'}</h2>
     <label style="display:flex;flex-direction:column;gap:4px" for="ename"><span class="label">Tên bài</span><input class="input" id="ename" placeholder="VD: Unit 3 – Endangered birds" value="${esc(E.name)}"></label>
@@ -1818,6 +1824,188 @@ async function relinkImages(){
   for(const d of touched) await flush(d.id);
   return n;
 }
+
+/* ---------- sync between devices through the user's own private GitHub repository ----------
+   data.json holds every lesson (+ progress, deletions, picture list); pictures live in images/.
+   Lessons merge by "last content edit wins" (cm), progress merges word by word, deletions win over older edits. */
+const SYNC_ON = () => IS_LOCAL && (location.protocol==='https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) && 'indexedDB' in window;
+let syncCfg={}; try{ syncCfg=JSON.parse(localStorage.getItem('sotu.sync')||'{}')||{}; }catch{}
+const saveSyncCfg=()=>{ try{ localStorage.setItem('sotu.sync', JSON.stringify(syncCfg)); }catch{} };
+let tombs={}; try{ tombs=JSON.parse(localStorage.getItem('sotu.tombs')||'{}')||{}; }catch{}
+const saveTombs=()=>{ try{ localStorage.setItem('sotu.tombs', JSON.stringify(tombs)); }catch{} };
+const syncState={busy:false, again:false, msg:'', err:false, timer:null};
+let syncBooted=false;
+const GH='https://api.github.com';
+function ghFetch(path, {method='GET', body, raw=false, token=syncCfg.token}={}){
+  return fetch(GH+path, {method, cache:'no-store', headers:{Authorization:'Bearer '+token, Accept: raw?'application/vnd.github.raw+json':'application/vnd.github+json', ...(body?{'Content-Type':'application/json'}:{})}, body: body?JSON.stringify(body):undefined});
+}
+const encPath = p => p.split('/').map(encodeURIComponent).join('/');
+const repoPath = (p='') => `/repos/${syncCfg.repo.split('/').map(encodeURIComponent).join('/')}${p?'/contents/'+encPath(p):''}`;
+function ghErr(r, where){
+  const m = r.status===401 ? 'Mã truy cập GitHub sai hoặc đã hết hạn. Hãy tạo mã mới và kết nối lại.'
+    : r.status===404 ? `Không thấy kho “${syncCfg.repo||''}”, hoặc mã chưa được cấp quyền cho kho đó.`
+    : r.status===403 ? 'Mã chưa có quyền ghi. Khi tạo mã, đặt Contents: Read and write.'
+    : `GitHub báo lỗi ${r.status}${where?' khi '+where:''}.`;
+  const e=new Error(m); e.status=r.status; e.user=true; return e;
+}
+const b64enc = str => { const by=new TextEncoder().encode(str); let t=''; for(let i=0;i<by.length;i+=0x8000) t+=String.fromCharCode(...by.subarray(i,i+0x8000)); return btoa(t); };
+const b64dec = b => new TextDecoder().decode(Uint8Array.from(atob(String(b).replace(/\s/g,'')), c=>c.charCodeAt(0)));
+const blobB64 = blob => new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]||''); fr.onerror=()=>rej(fr.error); fr.readAsDataURL(blob); });
+const imgPath = key => 'images/'+String(key).replace(/[^a-zA-Z0-9._-]/g, c=>'_'+c.charCodeAt(0).toString(16)+'_')+'.jpg';
+function stableStr(v){ return JSON.stringify(v, (k,x)=> x && typeof x==='object' && !Array.isArray(x) ? Object.keys(x).sort().reduce((o,kk)=>(o[kk]=x[kk],o),{}) : x); }
+const packDeck = d => ({id:d.id, name:d.name, words:d.words, progress:d.progress||{}, created:d.created||0, cm:d.cm||0});
+function scheduleSync(ms=8000){
+  if(!syncBooted || !SYNC_ON() || !syncCfg.token) return;
+  if(syncState.busy){ syncState.again=true; return; }
+  clearTimeout(syncState.timer); syncState.timer=setTimeout(()=>syncNow(), ms);
+}
+/* bring the remote copy into this device; returns what changed here */
+function mergeRemote(remote){
+  const out={content:false, progress:false, cur:false};
+  for(const [id,t] of Object.entries(remote.tombs||{})) if(!(tombs[id]>=t)) tombs[id]=t;
+  saveTombs();
+  for(const R of (remote.decks||[])){
+    if(!R?.id || !Array.isArray(R.words)) continue;
+    const id=String(R.id), rcm=R.cm||0;
+    if(tombs[id]!=null && tombs[id]>=rcm) continue;
+    const L=decks.get(id);
+    if(!L){
+      const d={id, name:String(R.name||'Bài'), words:R.words, progress:R.progress||{}, created:id===BUILTIN_ID?0:(R.created||Date.now()), builtin:id===BUILTIN_ID, cm:rcm};
+      d._sig=deckSig(d); decks.set(id,d); quietFlush.add(id); flush(id); out.content=true; if(id===curId) out.cur=true; continue;
+    }
+    let ch=false;
+    if(rcm>=(L.cm||0) && deckSig(R)!==L._sig){ L.name=String(R.name||L.name); L.words=R.words; L.cm=rcm; L._sig=deckSig(L); ch=out.content=true; if(id===curId) out.cur=true; }
+    const p=mergeProgress(L.progress||{}, R.progress||{});
+    if(stableStr(p)!==stableStr(L.progress||{})){ L.progress=p; ch=out.progress=true; }
+    if(ch){ quietFlush.add(id); flush(id); }
+  }
+  for(const [id,L] of [...decks]) if(tombs[id]!=null && tombs[id]>=(L.cm||0)){
+    decks.delete(id); out.content=true; if(id===curId) out.cur=true;
+    (id===BUILTIN_ID ? store.put({id, name:'(đã xoá)', words:[], progress:{}, created:0, deleted:true}) : store.del(id)).catch?.(()=>{});
+  }
+  return out;
+}
+async function syncNow(manual=false){
+  if(!SYNC_ON() || !syncCfg.token || !syncCfg.repo) return;
+  if(syncState.busy){ syncState.again=true; return; }
+  syncState.busy=true; clearTimeout(syncState.timer); syncState.timer=null;
+  if(manual){ syncState.msg='Đang đồng bộ…'; syncState.err=false; if(mode==='decks') refreshSyncBox(); }
+  let changed={content:false, progress:false, cur:false}, got=0, sent=0;
+  try{
+    for(let attempt=0;;attempt++){
+      let remote={decks:[], tombs:{}, images:{}}, sha=null;
+      const r=await ghFetch(repoPath('data.json'));
+      if(r.status===404){ const rr=await ghFetch(repoPath()); if(!rr.ok) throw ghErr(rr); }
+      else if(!r.ok) throw ghErr(r,'đọc dữ liệu');
+      else{
+        const j=await r.json(); sha=j.sha; let txt='';
+        if(j.content && j.encoding==='base64') txt=b64dec(j.content);
+        else { const r2=await ghFetch(repoPath('data.json'),{raw:true}); if(!r2.ok) throw ghErr(r2,'đọc dữ liệu'); txt=await r2.text(); }
+        try{ const pj=JSON.parse(txt); if(pj && typeof pj==='object') remote={decks:pj.decks||[], tombs:pj.tombs||{}, images:pj.images||{}}; }catch{}
+      }
+      const m=mergeRemote(remote); for(const k in m) changed[k]=changed[k]||m[k];
+      /* pictures: fetch what this device lacks, upload what the repository lacks */
+      const imap={...remote.images};
+      const want=new Set(); for(const d of decks.values()) for(const e of d.words) if(e.img?.user && e.img.key) want.add(String(e.img.key));
+      const have=new Set(((await uimgOp('readonly',st=>st.getAllKeys()).catch(()=>[]))||[]).map(String));
+      for(const k of want){
+        if(!have.has(k) && imap[k]){
+          const ri=await ghFetch(repoPath(imap[k]),{raw:true});
+          if(ri.ok){ const b=await ri.blob(); await uimgPut(k, new Blob([b],{type:'image/jpeg'})); have.add(k); got++; }
+        }else if(have.has(k) && !imap[k]){
+          const b=await uimgGet(k).catch(()=>null); if(!b) continue;
+          const path=imgPath(k), body={message:'Ảnh '+k, content:await blobB64(b)};
+          let up=await ghFetch(repoPath(path),{method:'PUT', body});
+          if(up.status===422 || up.status===409){ const ex=await ghFetch(repoPath(path)); if(ex.ok){ body.sha=(await ex.json()).sha; up=await ghFetch(repoPath(path),{method:'PUT', body}); } }
+          if(!up.ok) throw ghErr(up,'tải ảnh lên');
+          imap[k]=path; sent++;
+        }
+      }
+      /* publish this device's merged copy when it differs from the repository */
+      const mine={decks:[...decks.values()].map(packDeck).sort((a,b)=>a.id<b.id?-1:1), tombs, images:imap};
+      const theirs={decks:(remote.decks||[]).slice().sort((a,b)=>a.id<b.id?-1:1), tombs:remote.tombs||{}, images:remote.images||{}};
+      if(stableStr(mine)===stableStr(theirs)) break;
+      const body={message:'Cập nhật từ '+(/iPhone|iPad|Android/i.test(navigator.userAgent)?'điện thoại':'máy tính'), content:b64enc(JSON.stringify({v:1, updated:Date.now(), ...mine}))};
+      if(sha) body.sha=sha;
+      const pu=await ghFetch(repoPath('data.json'),{method:'PUT', body});
+      if(pu.ok){ sent++; break; }
+      if((pu.status===409 || pu.status===422) && attempt<3) continue;   // the other device saved first: read again and merge
+      throw ghErr(pu,'lưu dữ liệu');
+    }
+    syncCfg.last=Date.now(); saveSyncCfg();
+    syncState.msg=manual?'Đã đồng bộ xong.':''; syncState.err=false;
+  }catch(e){
+    syncState.err=true;
+    syncState.msg=e?.user ? e.message : 'Chưa đồng bộ được (có thể đang mất mạng). Sẽ tự thử lại sau.';
+    if(manual || e?.status===401) toast(syncState.msg);
+  }finally{
+    syncState.busy=false;
+    if(changed.content || changed.progress || got){
+      invalidateAll(); validCur(); if(changed.cur) resetSessions();
+      const typing=document.activeElement?.matches?.('input,textarea,select');
+      if((changed.content || got) && !typing){ renderAll(); } else { renderDeckSel(); renderStats(); }
+      if(changed.content || got) toast(got?`Đã nhận cập nhật từ máy khác (${got} ảnh).`:'Đã nhận cập nhật từ máy khác.');
+    }
+    if(mode==='decks') refreshSyncBox();
+    if(syncState.again){ syncState.again=false; scheduleSync(1500); }
+  }
+}
+function refreshSyncBox(){
+  const box=$('#syncbox'); if(!box) return;
+  const open=box.open, tmp=document.createElement('div'); tmp.innerHTML=syncPanel();
+  const nb=tmp.firstElementChild; if(!nb) return;
+  const tok=box.querySelector('#synctoken')?.value, rep=box.querySelector('#syncrepo')?.value;
+  box.replaceWith(nb); if(open) nb.setAttribute('open','');
+  if(tok && nb.querySelector('#synctoken')) nb.querySelector('#synctoken').value=tok;
+  if(rep && nb.querySelector('#syncrepo')) nb.querySelector('#syncrepo').value=rep;
+}
+const hhmm = t => { const d=new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; };
+function syncPanel(){
+  if(!SYNC_ON()) return '';
+  const on=!!syncCfg.token;
+  return `<details class="fmt" id="syncbox"><summary><b>Đồng bộ giữa máy tính và điện thoại</b> <span class="muted">· ${on?`đang bật${syncCfg.last?' · lần cuối '+hhmm(syncCfg.last):''}`:'chưa bật'}</span></summary>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      ${on?`<p style="margin:0">Đang đồng bộ với kho riêng tư <b>${esc(syncCfg.repo)}</b>. Bài, ảnh và tiến độ tự cập nhật khi mở app và vài giây sau mỗi thay đổi.</p>
+      <div class="row-btns"><button class="btn small primary" data-act="syncnow" ${syncState.busy?'disabled':''}>${syncState.busy?'Đang đồng bộ…':'Đồng bộ ngay'}</button><button class="btn small" data-act="syncoff">Tắt đồng bộ trên máy này</button></div>`
+      :`<p style="margin:0">Lưu bài, ảnh và tiến độ vào một kho GitHub <b>riêng tư</b> của bạn, để máy tính và điện thoại luôn giống nhau. Chỉ cần làm một lần trên mỗi máy, bật trên máy tính trước.</p>
+      <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px">
+        <li>Tạo kho riêng tư: mở <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a>, đặt tên <b>so-tu-data</b>, chọn <b>Private</b>, bấm <b>Create repository</b>. (Chỉ làm một lần.)</li>
+        <li>Tạo mã truy cập: mở <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>. Đặt tên, chọn thời hạn dài nhất; ở <b>Repository access</b> chọn <b>Only select repositories</b> → <b>so-tu-data</b>; ở <b>Permissions</b> → <b>Contents</b> chọn <b>Read and write</b>. Bấm <b>Generate token</b> rồi sao chép mã (bắt đầu bằng github_pat_).</li>
+        <li>Dán mã vào ô dưới và bấm <b>Kết nối</b>. Trên điện thoại, làm lại bước 2 và 3 (hoặc dán cùng một mã).</li>
+      </ol>
+      <label style="display:flex;flex-direction:column;gap:4px" for="synctoken"><span class="label">Mã truy cập GitHub</span><input class="input" id="synctoken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+      <label style="display:flex;flex-direction:column;gap:4px" for="syncrepo"><span class="label">Tên kho</span><input class="input" id="syncrepo" autocomplete="off" spellcheck="false" value="so-tu-data"></label>
+      <div class="row-btns"><button class="btn small primary" data-act="syncconnect" ${syncState.busy?'disabled':''}>${syncState.busy?'Đang kết nối…':'Kết nối'}</button></div>`}
+      ${syncState.msg?`<div class="status ${syncState.err?'err':''}" role="status">${esc(syncState.msg)}</div>`:''}
+      <p class="muted" style="margin:0;font-size:.82rem">Mã chỉ lưu trên máy này và chỉ mở được đúng kho so-tu-data. Kho để Private nên chỉ bạn xem được. Khi mã hết hạn, tạo mã mới và kết nối lại.</p>
+    </div></details>`;
+}
+async function syncConnect(){
+  const token=($('#synctoken')?.value||'').trim(); let name=($('#syncrepo')?.value||'so-tu-data').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\.git$/,'').replace(/\/+$/,'');
+  const fail=m=>{ syncState.busy=false; syncState.msg=m; syncState.err=true; refreshSyncBox(); $('#syncbox')?.setAttribute('open',''); };
+  if(!token) return fail('Hãy dán mã truy cập GitHub trước.');
+  syncState.busy=true; syncState.msg='Đang kiểm tra mã…'; syncState.err=false; refreshSyncBox();
+  try{
+    let repo=name;
+    if(!repo.includes('/')){ const u=await ghFetch('/user',{token}); if(!u.ok) return fail(u.status===401?'Mã truy cập sai hoặc đã hết hạn.':`GitHub báo lỗi ${u.status}.`); repo=(await u.json()).login+'/'+repo; }
+    const rr=await ghFetch(`/repos/${repo.split('/').map(encodeURIComponent).join('/')}`,{token});
+    if(!rr.ok) return fail(rr.status===401?'Mã truy cập sai hoặc đã hết hạn.':`Không thấy kho “${repo}”, hoặc mã chưa được cấp quyền cho kho đó (Only select repositories → ${repo.split('/')[1]}).`);
+    const info=await rr.json();
+    if(info.private===false) return fail(`Kho “${repo}” đang để công khai (Public), ai cũng xem được. Hãy vào Settings của kho, đổi sang Private rồi kết nối lại.`);
+    if(info.permissions && info.permissions.push===false) return fail('Mã chỉ có quyền đọc. Khi tạo mã, đặt Contents: Read and write.');
+    syncCfg={token, repo:info.full_name||repo}; saveSyncCfg();
+    syncState.busy=false; syncState.msg='';
+    await syncNow(true);
+    if(!syncState.err){ syncState.msg='Đã kết nối và đồng bộ xong.'; refreshSyncBox(); }
+  }catch{ fail('Không kết nối được GitHub. Kiểm tra mạng rồi thử lại.'); }
+}
+document.addEventListener('visibilitychange',()=>{
+  if(!syncCfg.token) return;
+  if(document.visibilityState==='visible') scheduleSync(400);
+  else if(syncState.timer){ clearTimeout(syncState.timer); syncState.timer=null; syncNow(); }   // push pending changes before the app goes to the background
+});
+setInterval(()=>{ if(syncCfg.token && document.visibilityState==='visible' && !syncState.busy) scheduleSync(50); }, 120000);
+
 async function saveDeck(msg){
   const pr=parseText(E.text);
   if(!pr.entries.length){ toast('Chưa có từ nào đúng định dạng “từ = nghĩa”.'); return; }
@@ -1877,6 +2065,9 @@ const acts={
   backup:()=>exportBackup(),
   intro:()=>showIntro(),
   gemsave:()=>geminiSave(),
+  syncconnect:()=>syncConnect(),
+  syncnow:()=>syncNow(true),
+  syncoff:()=>{ syncCfg={}; saveSyncCfg(); syncState.msg='Đã tắt đồng bộ trên máy này. Dữ liệu trên máy vẫn giữ nguyên.'; syncState.err=false; renderDecks(); $('#syncbox')?.setAttribute('open',''); },
   gappcopy:b=>copyGeminiPrompt(b),
   gappimport:async()=>{ const t=$('#gapppaste')?.value||''; if(!t.trim()){ toast('Hãy dán kết quả từ Gemini vào ô trước.'); return; } const ok=await importPasted(t); if(!ok) toast('Không đọc được kết quả. Hãy sao chép cả khung code mà Gemini trả về.'); },
   gemclear:()=>{ settings.geminiKey=''; settings.geminiModel=''; saveSettings(); gemState={busy:false,msg:'Đã tắt Gemini. Ảnh sẽ được đọc bằng OCR miễn phí.',err:false,models:[]}; engKind='ocr'; renderDecks(); $('#gembox')?.setAttribute('open',''); },
@@ -2001,7 +2192,8 @@ renderAll();
     if(s.words.some(w=>'imgQ' in w || ('img' in w && !w.img?.user))){ s.words=s.words.map(({img,imgQ,...w})=>img?.user ? {...w, img} : w); s._clean=true; }
     const have=decks.get(s.id);
     if(s.id===BUILTIN_ID && have){ const src=new Map(have.words.map(e=>[norm(e.w),e])); s.words=s.words.map(e=>{ const b=src.get(norm(e.w)); return b ? {...e, vi:e.vi||b.vi||'', pos:e.pos||b.pos||''} : e; }); }
-    decks.set(s.id, {...s, progress:mergeProgress(s.progress, have?.progress), builtin:s.id===BUILTIN_ID, created:s.id===BUILTIN_ID?0:(s.created||1)});
+    decks.set(s.id, {...s, progress:mergeProgress(s.progress, have?.progress), builtin:s.id===BUILTIN_ID, created:s.id===BUILTIN_ID?0:(s.created||1), cm:s.cm||0});
+    decks.get(s.id)._sig=deckSig(decks.get(s.id));
   }
   /* website: lessons published with the site (decks.json) are added once to this browser; local edits and deletions are respected */
   let seededN=0;
@@ -2023,7 +2215,7 @@ renderAll();
                 const src=new Map(sd.words.map(x=>[norm(x.w),x])); let ch=false;
                 for(const e of local.words){ const x=src.get(norm(e.w)); if(!x) continue;
                   for(const f of ['ex','exVi','pos','vi','ipa']) if(!e[f] && x[f]){ e[f]=x[f]; ch=true; } }
-                if(ch){ updatedN++; await flush(sd.id); }
+                if(ch){ updatedN++; local._sig=deckSig(local); await flush(sd.id); }
               }
               seeded[sd.id]=rev;
             }
@@ -2034,11 +2226,12 @@ renderAll();
             /* the untouched sample lesson in this browser gives way to the published version of it */
             const cur0=decks.get(sd.id);
             if(sd.id===BUILTIN_ID && cur0 && cur0.name==='Kākāpō (bài mẫu)' && sd.name!==cur0.name){
-              decks.set(sd.id,{...cur0, name:String(sd.name), words:sd.words, progress:mergeProgress(sd.progress||{}, cur0.progress)}); seededN++; await flush(sd.id);
+              decks.set(sd.id,{...cur0, name:String(sd.name), words:sd.words, progress:mergeProgress(sd.progress||{}, cur0.progress), cm:0}); decks.get(sd.id)._sig=deckSig(decks.get(sd.id)); seededN++; await flush(sd.id);
             }
             continue;
           }
-          decks.set(sd.id,{id:sd.id, name:String(sd.name||'Bài'), words:sd.words, progress:sd.progress||{}, created:sd.id===BUILTIN_ID?0:(sd.created||Date.now()), builtin:sd.id===BUILTIN_ID});
+          decks.set(sd.id,{id:sd.id, name:String(sd.name||'Bài'), words:sd.words, progress:sd.progress||{}, created:sd.id===BUILTIN_ID?0:(sd.created||Date.now()), builtin:sd.id===BUILTIN_ID, cm:0});
+          decks.get(sd.id)._sig=deckSig(decks.get(sd.id));
           seededN++; await flush(sd.id);
         }
         try{ localStorage.setItem('sotu.seeded',JSON.stringify(seeded)); }catch{}
@@ -2047,7 +2240,7 @@ renderAll();
     }catch{}
   }
   for(const d of decks.values()) if(d._clean){ delete d._clean; flush(d.id); }
-  const relinked = await relinkImages().catch(()=>0);
+  let relinked=0; try{ if(!localStorage.getItem('sotu.relinked')){ relinked=await relinkImages().catch(()=>0); localStorage.setItem('sotu.relinked','1'); } }catch{}
   if(window.SOTU_IPA_DATA) for(const d of decks.values()) for(const e of d.words) if(!e.ipa){ const o=ipaOffline(e.w); if(o) e.ipa=o; }
   invalidateAll();
   if(seededN) toast(`Đã thêm ${seededN} bài có sẵn trên trang.`);
@@ -2061,6 +2254,7 @@ renderAll();
   engKind = eng?.kind || null;
   imgOK = !!eng?.images;
   if(mode==='decks') renderDecks();
+  syncBooted=true; if(syncCfg.token) syncNow();
 })();
 </script>
 
