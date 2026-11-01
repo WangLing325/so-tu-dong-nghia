@@ -639,6 +639,8 @@ async function uimgOp(mode, fn){ const db=await uimgDB(); return new Promise((re
 const uimgPut=(k,b)=>uimgOp('readwrite',st=>st.put(b,k));
 const uimgGet=k=>uimgOp('readonly',st=>st.get(k));
 const uimgDel=k=>uimgOp('readwrite',st=>st.delete(k));
+/* drop every stored picture of a word (except one), so an old copy can never come back */
+async function uimgDelWord(w, keep){ const pre='u:'+norm(w)+':'; const keys=await uimgOp('readonly',st=>st.getAllKeys()).catch(()=>[]); for(const k of keys||[]){ const ks=String(k); if(ks!==keep && ks.startsWith(pre) && /^[0-9a-z]+$/.test(ks.slice(pre.length))) await uimgDel(ks).catch(()=>{}); } }
 async function uimgURL(k){ if(UIMG.urls.has(k)) return UIMG.urls.get(k); const b=await uimgGet(k).catch(()=>null); if(!b) return ''; const u=URL.createObjectURL(b); UIMG.urls.set(k,u); return u; }
 async function shrinkToJpeg(file, max=640){
   const bmp=await createImageBitmap(file); const k=Math.min(1, max/Math.max(bmp.width,bmp.height));
@@ -662,6 +664,7 @@ async function setUserImage(w, file){
     const key='u:'+norm(w)+':'+Date.now().toString(36);
     await uimgPut(key, blob);
     if(old?.key) uimgDel(old.key).catch(()=>{});
+    uimgDelWord(w, key).catch(()=>{});
     setImage(w, {user:true, key});
     toast(`Đã thêm ảnh cho “${w}”.`);
   }catch{ toast('Chưa lưu được ảnh. Thử ảnh khác hoặc ảnh nhỏ hơn.'); }
@@ -669,6 +672,7 @@ async function setUserImage(w, file){
 async function removeUserImage(w){
   const e=[...decks.values()].flatMap(d=>d.words).find(x=>norm(x.w)===norm(w));
   if(e?.img?.key) uimgDel(e.img.key).catch(()=>{});
+  uimgDelWord(w).catch(()=>{});
   setImage(w, undefined); toast(`Đã xoá ảnh của “${w}”.`);
 }
 function pickUserImage(w){ const inp=$('#uimgin'); if(!inp) return; inp.value=''; inp.dataset.w=w; inp.click(); }
@@ -1784,14 +1788,44 @@ async function importBackup(file){
   toast(n?`Đã khôi phục ${n} bài.`:'Không có bài nào trong tệp.');
 }
 
+/* the lesson text has no place for pictures, so carry each word's picture over when the lesson is re-saved
+   (same word → same picture; a word whose spelling was corrected keeps the picture of the word in its old position) */
+function keepImages(oldWords, newWords){
+  const byW=new Map(oldWords.filter(e=>e.img?.user).map(e=>[norm(e.w), e.img]));
+  const newKeys=new Set(newWords.map(e=>norm(e.w)));
+  newWords.forEach((e,i)=>{
+    if(e.img?.user) return;
+    const k=norm(e.w);
+    let img=byW.get(k) || liveImg(e.w);
+    if(!img){ const o=oldWords[i]; if(o?.img?.user && !newKeys.has(norm(o.w))) img=o.img; }
+    if(img) e.img=img;
+  });
+}
+/* pictures stay in this browser even if a word lost its pointer (e.g. an older version dropped it when a lesson was re-saved):
+   give each such word back its newest picture. A picture the user removed is deleted from storage, so it never comes back. */
+async function relinkImages(){
+  if(!IMG_ON()) return 0;
+  const keys=await uimgOp('readonly',st=>st.getAllKeys()).catch(()=>[]);
+  if(!keys?.length) return 0;
+  const newest=new Map();
+  for(const key of keys){ const m=/^u:(.*):([0-9a-z]+)$/.exec(String(key)); if(!m) continue; const t=parseInt(m[2],36); const cur=newest.get(m[1]); if(!cur || t>cur.t) newest.set(m[1],{key:String(key),t}); }
+  let n=0; const touched=new Set(), done=new Set();
+  for(const d of decks.values()) for(const e of d.words){
+    const k=norm(e.w); if(e.img?.user || !newest.has(k)) continue;
+    const img=liveImg(e.w) || {user:true, key:newest.get(k).key};
+    e.img=img; touched.add(d); if(!done.has(k)){ done.add(k); n++; }
+  }
+  for(const d of touched) await flush(d.id);
+  return n;
+}
 async function saveDeck(msg){
   const pr=parseText(E.text);
   if(!pr.entries.length){ toast('Chưa có từ nào đúng định dạng “từ = nghĩa”.'); return; }
   const name=E.name.trim() || 'Bài ' + new Date().toLocaleDateString('vi-VN');
   for(const e of pr.entries) for(const s of [...e.syn,...e.ant]){ const k=norm(s); if(E.pron?.[k]) (e.si ||= {})[k]=E.pron[k]; }
   let d;
-  if(E.id && decks.has(E.id)){ d=decks.get(E.id); d.name=name; d.words=pr.entries; }
-  else { d={id:uid(), name, words:pr.entries, progress:{}, created:Date.now()}; decks.set(d.id,d); }
+  if(E.id && decks.has(E.id)){ d=decks.get(E.id); keepImages(d.words, pr.entries); d.name=name; d.words=pr.entries; }
+  else { keepImages([], pr.entries); d={id:uid(), name, words:pr.entries, progress:{}, created:Date.now()}; decks.set(d.id,d); }
   invalidateAll(); curId=d.id; resetSessions(); newEditor(null);
   await flush(d.id);
   toast(msg || `Đã lưu “${name}” · ${d.words.length} từ. Từ mới cũng có trong “Tất cả từ đã lưu”.`);
@@ -2013,9 +2047,11 @@ renderAll();
     }catch{}
   }
   for(const d of decks.values()) if(d._clean){ delete d._clean; flush(d.id); }
+  const relinked = await relinkImages().catch(()=>0);
   if(window.SOTU_IPA_DATA) for(const d of decks.values()) for(const e of d.words) if(!e.ipa){ const o=ipaOffline(e.w); if(o) e.ipa=o; }
   invalidateAll();
   if(seededN) toast(`Đã thêm ${seededN} bài có sẵn trên trang.`);
+  else if(relinked) toast(`Đã khôi phục ảnh cho ${relinked} từ.`);
   introStats();
   try{ const s=JSON.parse(localStorage.getItem('sotu.ui')||'{}'); if(s.cur && decks.has(s.cur) && curId===BUILTIN_ID) curId=s.cur; }catch{}
   validCur();
