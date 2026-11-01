@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#3B6A1D">
 <meta name="description" content="Học thuộc từ vựng tiếng Anh qua từ đồng nghĩa, trái nghĩa và nghĩa tiếng Việt. Thêm từ bằng ảnh trang vở.">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script>try{if(localStorage.getItem('sotu.intro')!=='off'&&!sessionStorage.getItem('sotu.introSeen'))document.documentElement.classList.add('intro-on')}catch(e){}</script>
 <script src="ipa-dict.js" async onload="window.sotuIpaReady&&window.sotuIpaReady()"></script>
 <title>Sổ Từ Đồng Nghĩa</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -305,12 +306,81 @@ body.dragging .wrap{outline:2px dashed var(--moss);outline-offset:6px;border-rad
   .panel{padding:18px}
   .match{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
 }
+/* ---------- intro ---------- */
+.intro{display:none}
+html.intro-on{overflow:hidden}
+html.intro-on .intro{display:flex}
+html.intro-on .wrap{visibility:hidden}
+.intro{position:fixed;inset:0;z-index:100;align-items:center;justify-content:center;overflow:hidden;
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(16px,env(safe-area-inset-left,0px));
+  background:var(--paper);
+  background-image:repeating-linear-gradient(to bottom, transparent 0 35px, var(--rule) 35px 36px);
+  animation:introbg .7s ease both}
+@keyframes introbg{from{background-size:100% 0}to{background-size:100% 100%}}
+.intro-margin{position:absolute;top:0;bottom:0;left:max(48px,9vw);width:2px;background:var(--margin);opacity:.55;transform-origin:top;animation:drawdown .9s .15s cubic-bezier(.3,.7,.2,1) both}
+@keyframes drawdown{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.intro-card{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;max-width:560px}
+.intro-logo{width:86px;height:86px;border-radius:20px;background:var(--moss);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;
+  box-shadow:0 14px 34px -14px rgba(0,0,0,.45);animation:logopop .7s .25s cubic-bezier(.2,1.4,.4,1) both}
+.intro-logo i{display:block;width:44px;height:9px;border-radius:9px;background:var(--moss-ink);transform-origin:left;animation:bar .45s cubic-bezier(.3,.7,.2,1) both}
+.intro-logo i:nth-child(1){animation-delay:.7s}
+.intro-logo i:nth-child(2){animation-delay:.82s}
+@keyframes logopop{from{opacity:0;transform:scale(.4) rotate(-12deg)}to{opacity:1;transform:none}}
+@keyframes bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.intro-title{font-family:var(--f-display);font-size:clamp(2rem,7vw,3.2rem);font-weight:600;letter-spacing:-.01em;margin-top:6px;line-height:1.15}
+.intro-title span{display:inline-block;animation:letter .5s calc(.9s + var(--i) * 45ms) cubic-bezier(.3,.7,.2,1) both}
+@keyframes letter{from{opacity:0;transform:translateY(18px) rotate(4deg)}to{opacity:1;transform:none}}
+.intro-sub{margin:0;color:var(--muted);font-size:1.02rem;animation:fadeup .5s 1.75s ease both}
+.intro-sub b{color:var(--moss);font-family:var(--f-display)} .intro-sub b.a{color:var(--ant)}
+.intro-stats{margin:0;font-size:.9rem;color:var(--ink);font-variant-numeric:tabular-nums;animation:fadeup .5s 1.95s ease both;min-height:1.4em}
+.intro-go{font-size:1.05rem;padding:13px 26px;border-radius:12px;margin-top:6px;animation:fadeup .5s 2.15s ease both, glow 2.4s 2.8s ease-in-out infinite}
+.intro-go span{display:inline-block;transition:transform .2s}
+.intro-go:hover span{transform:translateX(4px)}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(59,106,29,0)}50%{box-shadow:0 0 0 8px rgba(59,106,29,.15)}}
+.intro-off{font-size:.82rem;color:var(--muted);animation:fadeup .5s 2.3s ease both}
+@keyframes fadeup{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.intro-chips{position:absolute;inset:0;pointer-events:none}
+.ichip{position:absolute;left:var(--x);top:var(--y);padding:6px 12px;border-radius:9px;background:var(--card);border:1px solid var(--line);font-family:var(--f-display);font-size:1rem;color:var(--ink);
+  box-shadow:var(--shadow);white-space:nowrap;animation:chipin .6s var(--d) cubic-bezier(.2,1.2,.4,1) both, drift 6s calc(var(--d) + .6s) ease-in-out infinite alternate}
+.ichip.syn{background:var(--moss-soft);border-color:transparent}
+.ichip.ant{background:var(--ant-soft);border-color:transparent}
+.ichip.vi{font-family:var(--f-body);font-size:.85rem;font-weight:600}
+@keyframes chipin{from{opacity:0;transform:scale(.6) translateY(12px)}to{opacity:.92;transform:none}}
+@keyframes drift{from{transform:translateY(0) rotate(-1.5deg)}to{transform:translateY(-12px) rotate(1.5deg)}}
+@media (max-width:560px){ .ichip{font-size:.82rem;padding:4px 9px} .ichip:nth-child(3),.ichip:nth-child(4),.ichip:nth-child(6){display:none} .intro-margin{left:24px} }
+.intro.leaving{animation:introout .55s cubic-bezier(.5,0,.7,.4) forwards}
+.intro.leaving .intro-card{animation:cardout .5s ease forwards}
+.intro.leaving .ichip{animation:chipout .45s ease forwards}
+@keyframes introout{to{opacity:0;visibility:hidden}}
+@keyframes cardout{to{opacity:0;transform:scale(1.08)}}
+@keyframes chipout{to{opacity:0;transform:scale(.6) translateY(-30px)}}
+.wrap.arrive{animation:arrive .6s .1s cubic-bezier(.3,.7,.2,1) both}
+@keyframes arrive{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
 </style>
 </head>
 <body>
 
 
+<div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+  <div class="intro-margin" aria-hidden="true"></div>
+  <div class="intro-chips" aria-hidden="true">
+    <span class="ichip" style="--x:8%;--y:16%;--d:.9s">nocturnal</span>
+    <span class="ichip syn" style="--x:74%;--y:12%;--d:1.05s">= night-active</span>
+    <span class="ichip ant" style="--x:82%;--y:44%;--d:1.2s"># diurnal</span>
+    <span class="ichip" style="--x:5%;--y:62%;--d:1.35s">vulnerable</span>
+    <span class="ichip syn" style="--x:14%;--y:84%;--d:1.5s">= at risk</span>
+    <span class="ichip vi" style="--x:70%;--y:80%;--d:1.65s">VI · dễ bị tổn thương</span>
+  </div>
+  <div class="intro-card">
+    <div class="intro-logo" aria-hidden="true"><i></i><i></i></div>
+    <h2 class="intro-title" id="introTitle" aria-label="Sổ Từ Đồng Nghĩa"><span style="--i:0">S</span><span style="--i:1">ổ</span><span style="--i:2">&nbsp;</span><span style="--i:3">T</span><span style="--i:4">ừ</span><span style="--i:5">&nbsp;</span><span style="--i:6">Đ</span><span style="--i:7">ồ</span><span style="--i:8">n</span><span style="--i:9">g</span><span style="--i:10">&nbsp;</span><span style="--i:11">N</span><span style="--i:12">g</span><span style="--i:13">h</span><span style="--i:14">ĩ</span><span style="--i:15">a</span></h2>
+    <p class="intro-sub">Học từ vựng IELTS qua <b>=</b> đồng nghĩa · <b class="a">#</b> trái nghĩa · ví dụ</p>
+    <p class="intro-stats" id="introStats">&nbsp;</p>
+    <button class="btn primary intro-go" id="introGo" type="button">Bắt đầu học <span aria-hidden="true">→</span></button>
+    <label class="check intro-off" for="introOff"><input type="checkbox" id="introOff"> Không hiện lại phần giới thiệu</label>
+  </div>
+</div>
 <div class="wrap">
   <header class="top">
     <div class="brand">
@@ -1252,7 +1322,7 @@ function renderDecks(){
         <button class="btn small" data-act="edit" data-id="${esc(d.id)}">Sửa</button>
         <button class="btn small ${delArmed===d.id?'warn':''}" data-act="del" data-id="${esc(d.id)}">${delArmed===d.id?'Bấm lần nữa để xoá':'Xoá'}</button></div></div>`; }).join('')}</div>
     <div class="toolbar"><span>${store.kind==='db'?'Bài và tiến độ được lưu riêng cho tài khoản của bạn.':(IS_LOCAL?'Bài và tiến độ lưu trên máy này. Nên sao lưu ra tệp thỉnh thoảng.':'Bài và tiến độ đang lưu trong trình duyệt này.')}</span>
-      <span class="row-btns"><button class="btn small" data-act="backup">Sao lưu ra tệp</button><label class="btn small" for="restorein" style="cursor:pointer">Khôi phục từ tệp</label><input type="file" id="restorein" accept="application/json,.json" hidden></span></div></section>
+      <span class="row-btns">${IS_LOCAL && /^https?:$/.test(location.protocol)?'<button class="btn small" data-act="intro">Xem lại phần giới thiệu</button>':''}<button class="btn small" data-act="backup">Sao lưu ra tệp</button><label class="btn small" for="restorein" style="cursor:pointer">Khôi phục từ tệp</label><input type="file" id="restorein" accept="application/json,.json" hidden></span></div></section>
 
    <section class="editor"><h2 style="font-size:1.25rem">${E.id?`Sửa bài: ${esc(decks.get(E.id)?.name||'')}`:'Thêm bài mới'}</h2>
     <label style="display:flex;flex-direction:column;gap:4px" for="ename"><span class="label">Tên bài</span><input class="input" id="ename" placeholder="VD: Unit 3 – Endangered birds" value="${esc(E.name)}"></label>
@@ -1771,6 +1841,7 @@ const acts={
   fillpos:()=>fillPOS(),
   fillex:()=>fillEx(),
   backup:()=>exportBackup(),
+  intro:()=>showIntro(),
   gemsave:()=>geminiSave(),
   gappcopy:b=>copyGeminiPrompt(b),
   gappimport:async()=>{ const t=$('#gapppaste')?.value||''; if(!t.trim()){ toast('Hãy dán kết quả từ Gemini vào ô trước.'); return; } const ok=await importPasted(t); if(!ok) toast('Không đọc được kết quả. Hãy sao chép cả khung code mà Gemini trả về.'); },
@@ -1835,6 +1906,56 @@ window.sotuIpaReady = () => {
   invalidateAll();
   if(!posEditKey && !document.activeElement?.matches?.('input,textarea,select')) renderMode();
 };
+/* ---------- intro: shown when the website marks html.intro-on (first open in a session) ---------- */
+function introChime(){
+  if(!sfxOn) return;
+  try{
+    audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
+    const t0=audioCtx.currentTime+0.02;
+    [[523.25,0],[659.25,.09],[783.99,.18],[1046.5,.28]].forEach(([f,dt],i)=>{
+      for(const [type,mul,vol] of [['sine',1,.16],['triangle',2,.04]]){
+        const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+        o.type=type; o.frequency.value=f*mul;
+        g.gain.setValueAtTime(0.0001,t0+dt); g.gain.exponentialRampToValueAtTime(vol,t0+dt+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+dt+(i===3?0.9:0.45));
+        o.connect(g).connect(audioCtx.destination); o.start(t0+dt); o.stop(t0+dt+1);
+      }
+    });
+    // soft whoosh: filtered noise sweeping up
+    const len=Math.floor(audioCtx.sampleRate*.5), buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate), ch=buf.getChannelData(0);
+    for(let i=0;i<len;i++) ch[i]=(Math.random()*2-1)*(1-i/len);
+    const n=audioCtx.createBufferSource(), bp=audioCtx.createBiquadFilter(), g=audioCtx.createGain();
+    n.buffer=buf; bp.type='bandpass'; bp.Q.value=1.2; bp.frequency.setValueAtTime(400,t0+.25); bp.frequency.exponentialRampToValueAtTime(3200,t0+.7);
+    g.gain.setValueAtTime(0.0001,t0+.25); g.gain.exponentialRampToValueAtTime(0.09,t0+.4); g.gain.exponentialRampToValueAtTime(0.0001,t0+.75);
+    n.connect(bp).connect(g).connect(audioCtx.destination); n.start(t0+.25);
+  }catch{}
+}
+function introStats(){
+  const el=$('#introStats'); if(!el) return;
+  const all=allDeck(), c=counts(all), n=sortedDecks().length;
+  el.textContent = c.t ? `${c.t} từ · ${n} bài · đã thuộc ${c.m} từ${c.l?` · đang học ${c.l}`:''}` : 'Bắt đầu bằng cách thêm ảnh trang từ vựng';
+}
+function closeIntro(){
+  const intro=$('#intro'); if(!intro || !document.documentElement.classList.contains('intro-on') || intro.classList.contains('leaving')) return;
+  try{ sessionStorage.setItem('sotu.introSeen','1'); if($('#introOff')?.checked) localStorage.setItem('sotu.intro','off'); }catch{}
+  introChime();
+  const done=()=>{ document.documentElement.classList.remove('intro-on'); intro.classList.remove('leaving'); const w=$('.wrap'); w.classList.remove('arrive'); void w.offsetWidth; w.classList.add('arrive'); };
+  if(reducedMotion()){ done(); return; }
+  intro.classList.add('leaving');
+  setTimeout(()=>{ done(); setTimeout(()=>$('.wrap').classList.remove('arrive'),800); }, 520);
+}
+function showIntro(){
+  try{ localStorage.removeItem('sotu.intro'); }catch{}
+  const off=$('#introOff'); if(off) off.checked=false;
+  introStats();
+  const intro=$('#intro'); intro.classList.remove('leaving');
+  // restart the entrance animations
+  intro.style.display='none'; void intro.offsetWidth; intro.style.display='';
+  document.documentElement.classList.add('intro-on');
+  setTimeout(()=>$('#introGo')?.focus({preventScroll:true}), 50);
+}
+$('#introGo').addEventListener('click', closeIntro);
+document.addEventListener('keydown',ev=>{ if(!document.documentElement.classList.contains('intro-on')) return; if(ev.key==='Escape' || ev.key==='Enter' || (ev.key===' ' && !ev.target.closest('input'))){ ev.preventDefault(); ev.stopImmediatePropagation(); closeIntro(); } }, true);
+if(document.documentElement.classList.contains('intro-on')){ introStats(); setTimeout(()=>$('#introGo')?.focus({preventScroll:true}), 60); }
 renderAll();
 (async()=>{
   await store.init();
@@ -1895,6 +2016,7 @@ renderAll();
   if(window.SOTU_IPA_DATA) for(const d of decks.values()) for(const e of d.words) if(!e.ipa){ const o=ipaOffline(e.w); if(o) e.ipa=o; }
   invalidateAll();
   if(seededN) toast(`Đã thêm ${seededN} bài có sẵn trên trang.`);
+  introStats();
   try{ const s=JSON.parse(localStorage.getItem('sotu.ui')||'{}'); if(s.cur && decks.has(s.cur) && curId===BUILTIN_ID) curId=s.cur; }catch{}
   validCur();
   renderDeckSel(); renderStats();
