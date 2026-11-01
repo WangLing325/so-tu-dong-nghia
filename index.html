@@ -700,8 +700,8 @@ function uimgDB(){
   return UIMG.db;
 }
 async function uimgOp(mode, fn){ const db=await uimgDB(); return new Promise((res,rej)=>{ const t=db.transaction('img',mode); const rq=fn(t.objectStore('img')); let out; if(rq) rq.onsuccess=()=>{ out=rq.result; }; t.oncomplete=()=>res(out); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); }); }
-const uimgPut=(k,b)=>uimgOp('readwrite',st=>st.put(b,k));
-const uimgGet=k=>uimgOp('readonly',st=>st.get(k));
+const uimgPut=async(k,b)=>{ try{ return await uimgOp('readwrite',st=>st.put(b,k)); }catch(e){ if(!(b instanceof Blob)) throw e; const buf=await b.arrayBuffer(); return uimgOp('readwrite',st=>st.put({t:b.type||'image/jpeg', b:buf},k)); } };
+const uimgGet=async k=>{ const v=await uimgOp('readonly',st=>st.get(k)); return v && !(v instanceof Blob) && v.b ? new Blob([v.b],{type:v.t||'image/jpeg'}) : v; };
 const uimgDel=k=>uimgOp('readwrite',st=>st.delete(k));
 /* drop every stored picture of a word (except one), so an old copy can never come back */
 async function uimgDelWord(w, keep){ const pre='u:'+norm(w)+':'; const keys=await uimgOp('readonly',st=>st.getAllKeys()).catch(()=>[]); for(const k of keys||[]){ const ks=String(k); if(ks!==keep && ks.startsWith(pre) && /^[0-9a-z]+$/.test(ks.slice(pre.length))) await uimgDel(ks).catch(()=>{}); } }
@@ -1951,7 +1951,7 @@ async function syncNow(manual=false){
   if(syncState.busy){ syncState.again=true; return; }
   syncState.busy=true; clearTimeout(syncState.timer); syncState.timer=null;
   if(manual){ syncState.msg='Đang đồng bộ…'; syncState.err=false; if(mode==='decks') refreshSyncBox(); }
-  let changed={content:false, progress:false, cur:false}, got=0, sent=0;
+  let changed={content:false, progress:false, cur:false}, got=0, sent=0, imgFail=0, step='đọc dữ liệu';
   try{
     for(let attempt=0;;attempt++){
       let remote={decks:[], tombs:{}, images:{}}, sha=null;
@@ -1964,15 +1964,22 @@ async function syncNow(manual=false){
         else { const r2=await ghFetch(repoPath('data.json'),{raw:true}); if(!r2.ok) throw ghErr(r2,'đọc dữ liệu'); txt=await r2.text(); }
         try{ const pj=JSON.parse(txt); if(pj && typeof pj==='object') remote={decks:pj.decks||[], tombs:pj.tombs||{}, images:pj.images||{}}; }catch{}
       }
+      step='gộp dữ liệu';
       const m=mergeRemote(remote); for(const k in m) changed[k]=changed[k]||m[k];
+      step='đồng bộ ảnh';
       /* pictures: fetch what this device lacks, upload what the repository lacks */
       const imap={...remote.images};
       const want=new Set(); for(const d of decks.values()) for(const e of d.words) if(e.img?.user && e.img.key) want.add(String(e.img.key));
       const have=new Set(((await uimgOp('readonly',st=>st.getAllKeys()).catch(()=>[]))||[]).map(String));
       for(const k of want){
         if(!have.has(k) && imap[k]){
-          const ri=await ghFetch(repoPath(imap[k]),{raw:true});
-          if(ri.ok){ const b=await ri.blob(); await uimgPut(k, new Blob([b],{type:'image/jpeg'})); have.add(k); got++; }
+          try{
+            const ri=await ghFetch(repoPath(imap[k])); if(!ri.ok) throw new Error('HTTP '+ri.status);
+            const j=await ri.json(); let blob;
+            if(j.content && j.encoding==='base64'){ const bin=atob(String(j.content).replace(/\s/g,'')); const by=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) by[i]=bin.charCodeAt(i); blob=new Blob([by],{type:'image/jpeg'}); }
+            else { const r2=await ghFetch(repoPath(imap[k]),{raw:true}); if(!r2.ok) throw new Error('HTTP '+r2.status); blob=new Blob([await r2.arrayBuffer()],{type:'image/jpeg'}); }
+            await uimgPut(k, blob); have.add(k); got++;
+          }catch(err){ imgFail++; console.warn('sync image', k, err); }
         }else if(have.has(k) && !imap[k]){
           const b=await uimgGet(k).catch(()=>null); if(!b) continue;
           const path=imgPath(k), body={message:'Ảnh '+k, content:await blobB64(b)};
@@ -1982,6 +1989,7 @@ async function syncNow(manual=false){
           imap[k]=path; sent++;
         }
       }
+      step='lưu dữ liệu';
       /* publish this device's merged copy when it differs from the repository */
       const mine={decks:[...decks.values()].map(packDeck).sort((a,b)=>a.id<b.id?-1:1), tombs, images:imap};
       const theirs={decks:(remote.decks||[]).slice().sort((a,b)=>a.id<b.id?-1:1), tombs:remote.tombs||{}, images:remote.images||{}};
@@ -1994,10 +2002,11 @@ async function syncNow(manual=false){
       throw ghErr(pu,'lưu dữ liệu');
     }
     syncCfg.last=Date.now(); saveSyncCfg();
-    syncState.msg=manual?'Đã đồng bộ xong.':''; syncState.err=false;
+    syncState.msg = imgFail ? `Đã đồng bộ, nhưng chưa tải được ${imgFail} ảnh. Sẽ thử lại lần sau.` : (manual?'Đã đồng bộ xong.':''); syncState.err=!!imgFail;
   }catch(e){
-    syncState.err=true;
-    syncState.msg=e?.user ? e.message : 'Chưa đồng bộ được (có thể đang mất mạng). Sẽ tự thử lại sau.';
+    syncState.err=true; console.warn('sync', step, e);
+    const why = e instanceof TypeError && /fetch|load|network/i.test(e.message||'') ? 'không kết nối được GitHub, có thể đang mất mạng' : `lỗi khi ${step}: ${e?.name||'Error'}${e?.message?' – '+e.message:''}`;
+    syncState.msg=e?.user ? e.message : `Chưa đồng bộ được (${why}). Sẽ tự thử lại sau.`;
     if(manual || e?.status===401) toast(syncState.msg);
   }finally{
     syncState.busy=false;
