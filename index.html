@@ -264,6 +264,7 @@ select{appearance:auto}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap}
 .thumbs img{height:64px;border-radius:6px;border:1px solid var(--line)}
 .status{font-size:.88rem}
+.dno{display:inline-grid;place-items:center;min-width:1.7em;height:1.7em;padding:0 .35em;margin-right:.5em;border-radius:999px;background:var(--moss-soft);color:var(--moss);font:700 .8rem/1 system-ui,sans-serif;vertical-align:.18em}
 .status.err{color:var(--ant)}
 textarea{min-height:260px;font-family:var(--f-ipa);font-size:1.02rem;line-height:1.6;resize:vertical}
 .fmt{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;font-size:.88rem;display:flex;flex-direction:column;gap:8px}
@@ -778,7 +779,7 @@ const needWords = (n) => `<div class="panel empty">Chế độ này cần ít nh
 function renderDeckSel(){
   const sel=$('#deckSel'), all=allDeck();
   sel.innerHTML=`<option value="${ALL_ID}" ${curId===ALL_ID?'selected':''}>★ Tất cả từ đã lưu · ${all.words.length} từ</option><optgroup label="Từng bài">`
-    + sortedDecks().map(d=>`<option value="${esc(d.id)}" ${d.id===curId?'selected':''}>${esc(d.name)} · ${d.words.length} từ</option>`).join('') + '</optgroup>';
+    + sortedDecks().map((d,i)=>`<option value="${esc(d.id)}" ${d.id===curId?'selected':''}>${i+1}. ${esc(d.name)} · ${d.words.length} từ</option>`).join('') + '</optgroup>';
 }
 function renderStats(){
   const c=counts(cur()), t=Math.max(1,c.t);
@@ -1381,10 +1382,10 @@ function renderDecks(){
       <div class="muted" style="font-size:.85rem">${ca.t} từ từ ${list.length} bài · đã thuộc ${ca.m}${curId===ALL_ID?' · đang học':''}</div>
       <div class="muted" style="font-size:.82rem">Thẻ, trắc nghiệm, gõ từ và ghép cặp trộn từ mọi bài, ưu tiên từ bạn hay quên.</div>
       ${curId!==ALL_ID?`<div class="row-btns"><button class="btn small primary" data-act="use" data-id="${ALL_ID}">Ôn tất cả</button></div>`:''}</div>`}
-    ${list.map(d=>{ const c=counts(d);
-      if(selMode) return `<label class="deck selectable ${selIds.has(d.id)?'picked':''}" for="sel-${esc(d.id)}"><span class="pickrow"><input type="checkbox" id="sel-${esc(d.id)}" data-sel="${esc(d.id)}" ${selIds.has(d.id)?'checked':''}><h3>${esc(d.name)}</h3></span>
+    ${list.map((d,i)=>{ const c=counts(d), no=`<span class="dno">${i+1}</span>`;
+      if(selMode) return `<label class="deck selectable ${selIds.has(d.id)?'picked':''}" for="sel-${esc(d.id)}"><span class="pickrow"><input type="checkbox" id="sel-${esc(d.id)}" data-sel="${esc(d.id)}" ${selIds.has(d.id)?'checked':''}><h3>${no}${esc(d.name)}</h3></span>
         <span class="muted" style="font-size:.85rem">${c.t} từ · đã thuộc ${c.m}</span></label>`;
-      return `<div class="deck ${d.id===curId?'cur':''}"><h3>${esc(d.name)}</h3>
+      return `<div class="deck ${d.id===curId?'cur':''}"><h3>${no}${esc(d.name)}</h3>
       <div class="muted" style="font-size:.85rem">${c.t} từ · đã thuộc ${c.m}${d.id===curId?' · đang học':''}</div>
       <div class="row-btns">${d.id!==curId?`<button class="btn small primary" data-act="use" data-id="${esc(d.id)}">Học bài này</button>`:''}
         <button class="btn small" data-act="edit" data-id="${esc(d.id)}">Sửa</button>
