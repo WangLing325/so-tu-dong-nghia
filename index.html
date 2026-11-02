@@ -180,7 +180,10 @@ select{appearance:auto}
 
 /* quiz */
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--shadow)}
-.qprompt{font-size:.9rem;color:var(--muted);font-weight:500}
+.qprompt{font-size:1.05rem;color:var(--ink);font-weight:700;line-height:1.5}
+mark.kw{padding:1px 8px;border-radius:7px;font-weight:700;background:var(--moss-soft);color:var(--moss);white-space:nowrap}
+mark.kw.ant{background:var(--ant-soft);color:var(--ant)}
+.qnote mark.kw{padding:0 6px;font-weight:600}
 .qcue{font-family:var(--f-display);font-size:1.45rem;line-height:1.35;font-weight:500}
 .qcue.word{font-size:2rem;font-weight:600}
 .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px}
@@ -873,6 +876,8 @@ function makeQ(e, pool){
   if(t==='word2def') return {e, t, prompt:'Nghĩa / từ đồng nghĩa của', cue:e.w, word:true, opts:shuffle([e,...others.slice(0,3)]).map(x=>({label:synText(x,2), ok:x===e}))};
   return {e, t, prompt:'Từ nào ứng với', cue:synText(e,3), word:false, opts:shuffle([e,...others.slice(0,3)]).map(x=>({label:x.w, ok:x===e}))};
 }
+/* synonym words green, antonym words pink-red: the same colours as the chips in the List tab */
+function hlPrompt(t){ return esc(t).replace(/(từ )?(đồng nghĩa)/gi,'<mark class="kw">$&</mark>').replace(/(từ )?(trái nghĩa)/gi,'<mark class="kw ant">$&</mark>'); }
 function renderQuiz(){
   const d=cur();
   if(d.words.length<4) return $('#stage').innerHTML=needWords(4);
@@ -881,7 +886,7 @@ function renderQuiz(){
   const {q:qq}=Q, a=Q.answered;
   $('#stage').innerHTML=`<div class="panel">
     <div class="toolbar"><span class="count">Câu ${Q.i+1}/${Q.list.length}</span><span class="count">Đúng ${Q.right}</span></div>
-    <div><div class="qprompt">${qq.prompt}</div><div class="qcue ${qq.word?'word':''}">${qq.word?esc(qq.cue):`${qq.pre??'= '}${esc(qq.cue)}`}${qq.word&&canSpeak?' '+speakBtn(qq.cue):''}</div></div>
+    <div><div class="qprompt">${hlPrompt(qq.prompt)}</div><div class="qcue ${qq.word?'word':''}">${qq.word?esc(qq.cue):`${qq.pre??'= '}${esc(qq.cue)}`}${qq.word&&canSpeak?' '+speakBtn(qq.cue):''}</div></div>
     <div class="opts">${qq.opts.map((o,i)=>`<button class="opt ${a!=null?(o.ok?'right':(i===a?'wrong':'')):''}" data-act="ans" data-i="${i}" ${a!=null?'disabled':''}><span class="k">${a!=null?(o.ok?'✓':(i===a?'✗':i+1)):i+1}</span><span class="t">${esc(o.label)}</span></button>`).join('')}</div>
     ${a!=null?`<div class="feedback"><div class="verdict ${qq.opts[a].ok?'ok':'no'}">${qq.opts[a].ok?'Chính xác.':'Chưa đúng. Ghi lại cả dòng này nhé:'}</div>${detail(qq.e,{withWord:true})}
       <div><button class="btn primary" data-act="nextq" id="nextq">Câu tiếp <kbd style="font-size:.75rem;opacity:.8">Enter</kbd></button></div></div>`:''}
@@ -992,7 +997,7 @@ function renderSyn(){
   const answered = q.t==='pick' ? q.done : q.t==='recall' ? !!q.res : q.ans!=null;
   let body='', verdict='', note='';
   if(q.t==='pick'){
-    body=`<div><div class="qprompt">Chọn TẤT CẢ các từ đồng nghĩa với</div>${wordCue(e.w)}<div class="muted" style="font-size:.85rem">Có thể có nhiều đáp án. Coi chừng từ trái nghĩa.</div></div>
+    body=`<div><div class="qprompt">Chọn TẤT CẢ các <mark class="kw">từ đồng nghĩa</mark> với</div>${wordCue(e.w)}<div class="muted qnote" style="font-size:.85rem">Có thể có nhiều đáp án. Coi chừng <mark class="kw ant">từ trái nghĩa</mark>.</div></div>
       <div class="opts">${q.opts.map((o,i)=>{ const s=q.sel.has(i);
         const cls=!q.done?(s?'sel':''):(o.k==='syn'?(s?'right':'missed'):(s?'wrong':''));
         return `<button class="opt ${cls}" data-act="spick" data-i="${i}" aria-pressed="${s}" ${q.done?'disabled':''}><span class="k">${s?'✓':i+1}</span><span class="t">${esc(o.l)}${q.done&&o.k==='ant'?' <span class="badge" style="background:var(--ant-soft);color:var(--ant)"># trái nghĩa</span>':''}${q.done&&o.k==='syn'&&!s?' <span class="badge m">bỏ sót</span>':''}</span></button>`; }).join('')}</div>
@@ -1010,11 +1015,11 @@ function renderSyn(){
   } else if(q.t==='sort'){
     body=`<div><div class="qprompt">Hai từ này có quan hệ gì?</div>
       <div class="wordline" style="margin-top:6px;gap:14px"><span class="qcue word">${esc(e.w)}</span><span class="sym" style="color:var(--muted)">?</span><span class="qcue word" style="font-weight:500">${esc(q.l)}</span>${speakBtn(q.l)}</div></div>
-      <div class="opts">${[['syn','= Đồng nghĩa'],['ant','# Trái nghĩa']].map(([k,l],i)=>`<button class="opt ${q.ans!=null?(k===q.k?'right':(k===q.ans?'wrong':'')):''}" data-act="ssort" data-k="${k}" ${q.ans!=null?'disabled':''}><span class="k">${q.ans!=null?(k===q.k?'✓':(k===q.ans?'✗':i+1)):i+1}</span><span class="t">${l}</span></button>`).join('')}</div>`;
+      <div class="opts">${[['syn','<mark class="kw">= Đồng nghĩa</mark>'],['ant','<mark class="kw ant"># Trái nghĩa</mark>']].map(([k,l],i)=>`<button class="opt ${q.ans!=null?(k===q.k?'right':(k===q.ans?'wrong':'')):''}" data-act="ssort" data-k="${k}" ${q.ans!=null?'disabled':''}><span class="k">${q.ans!=null?(k===q.k?'✓':(k===q.ans?'✗':i+1)):i+1}</span><span class="t">${l}</span></button>`).join('')}</div>`;
     if(q.ans!=null){ verdict=q.ans===q.k?'Chính xác.':'Chưa đúng.'; note=`“${esc(q.l)}” là từ ${q.k==='syn'?'đồng nghĩa':'trái nghĩa'} của <b>${esc(e.w)}</b>.`; }
   } else {
     const syns=shortSyn(e);
-    body=`<div><div class="qprompt">Viết MỘT từ đồng nghĩa với</div>${wordCue(e.w)}${e.vi?`<div class="muted">VI · ${esc(e.vi)}</div>`:''}</div>
+    body=`<div><div class="qprompt">Viết MỘT <mark class="kw">từ đồng nghĩa</mark> với</div>${wordCue(e.w)}${e.vi?`<div class="muted">VI · ${esc(e.vi)}</div>`:''}</div>
       ${q.hint&&!q.res?`<div class="chips">${syns.map(s=>`<span class="chip mask" style="font-size:1.05rem;letter-spacing:.12em">${esc(hintMask(s,q.hint))}</span>`).join('')}</div>`:''}
       <form class="typerow" id="synform" autocomplete="off">
         <input class="input ${q.res?(q.res.ok?'ok':'no'):''}" id="synin" placeholder="Gõ một từ đồng nghĩa rồi bấm Enter" value="${esc(q.val)}" ${q.res?'readonly':''} autocapitalize="off" spellcheck="false">
