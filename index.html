@@ -184,6 +184,10 @@ select{appearance:auto}
 mark.kw{padding:1px 8px;border-radius:7px;font-weight:700;background:var(--moss-soft);color:var(--moss);white-space:nowrap}
 mark.kw.ant{background:var(--ant-soft);color:var(--ant)}
 .count mark.kw{padding:0 6px;font-weight:600}
+.oddinfo{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.oddw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.oddw .qcue{font-size:1.5rem}
+.oddinfo mark.kw{padding:1px 7px}
 .qnote mark.kw{padding:0 6px;font-weight:600}
 .qcue{font-family:var(--f-display);font-size:1.45rem;line-height:1.35;font-weight:500}
 .qcue.word{font-size:2rem;font-weight:600}
@@ -1010,8 +1014,13 @@ function renderSyn(){
     if(q.ans!=null){
       const o=q.opts.find(x=>x.ok), ok=q.opts[q.ans].ok, src=o.ant?null:ownerOf(o.l);
       verdict=ok?'Chính xác.':'Chưa đúng.';
-      note=o.ant?`“${esc(o.l)}” là từ trái nghĩa của <b>${esc(e.w)}</b>. Ba từ còn lại cùng một nhóm nghĩa:`
-        : `“${esc(o.l)}” ${src?`là từ ${src.rel} của <b>${esc(src.e.w)}</b>`:'thuộc nhóm nghĩa khác'}. Ba từ còn lại cùng nhóm với <b>${esc(e.w)}</b>:`;
+      const own=o.ant?{e, rel:'trái nghĩa'}:src, self=cur().words.find(x=>norm(x.w)===norm(o.l));   // word type: its own entry if it is a lesson word, else the word it belongs to
+      const posOf=(self?.pos && POS[self.pos]) ? self : own?.e;
+      note=`<div class="oddinfo">
+          <div class="oddw"><span class="qcue word">${esc(o.l)}</span>${canSpeak?speakBtn(o.l):''}${posOf?posBadge(posOf):''}</div>
+          <div>${own?`là <mark class="kw ${own.rel==='trái nghĩa'?'ant':''}">${own.rel==='trái nghĩa'?'# từ trái nghĩa':'= từ đồng nghĩa'}</mark> của <b>${esc(own.e.w)}</b>${own.e.vi?` · <span class="muted">${esc(own.e.vi)}</span>`:''}`:'thuộc một nhóm nghĩa khác'}</div>
+        </div>
+        <div style="margin-top:10px">${o.ant?'Ba từ còn lại cùng một nhóm nghĩa:':`Ba từ còn lại cùng nhóm với <b>${esc(e.w)}</b>:`}</div>`;
     }
   } else if(q.t==='sort'){
     body=`<div><div class="qprompt">Hai từ này có quan hệ gì?</div>
