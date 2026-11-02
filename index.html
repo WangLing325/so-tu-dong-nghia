@@ -183,6 +183,7 @@ select{appearance:auto}
 .qprompt{font-size:1.05rem;color:var(--ink);font-weight:700;line-height:1.5}
 mark.kw{padding:1px 8px;border-radius:7px;font-weight:700;background:var(--moss-soft);color:var(--moss);white-space:nowrap}
 mark.kw.ant{background:var(--ant-soft);color:var(--ant)}
+.count mark.kw{padding:0 6px;font-weight:600}
 .qnote mark.kw{padding:0 6px;font-weight:600}
 .qcue{font-family:var(--f-display);font-size:1.45rem;line-height:1.35;font-weight:500}
 .qcue.word{font-size:2rem;font-weight:600}
@@ -874,10 +875,10 @@ function makeQ(e, pool){
     t='def2word';
   }
   if(t==='word2def') return {e, t, prompt:'Nghĩa / từ đồng nghĩa của', cue:e.w, word:true, opts:shuffle([e,...others.slice(0,3)]).map(x=>({label:synText(x,2), ok:x===e}))};
-  return {e, t, prompt:'Từ nào ứng với', cue:synText(e,3), word:false, opts:shuffle([e,...others.slice(0,3)]).map(x=>({label:x.w, ok:x===e}))};
+  return {e, t, prompt:'Từ nào có nghĩa / từ đồng nghĩa là', cue:synText(e,3), word:false, opts:shuffle([e,...others.slice(0,3)]).map(x=>({label:x.w, ok:x===e}))};
 }
 /* synonym words green, antonym words pink-red: the same colours as the chips in the List tab */
-function hlPrompt(t){ return esc(t).replace(/(từ )?(đồng nghĩa)/gi,'<mark class="kw">$&</mark>').replace(/(từ )?(trái nghĩa)/gi,'<mark class="kw ant">$&</mark>'); }
+function hlPrompt(t){ return esc(t).replace(/(từ )?(đồng nghĩa)/gi,'<mark class="kw">$&</mark>').replace(/(từ )?(trái nghĩa)|KHÔNG cùng nghĩa/gi,'<mark class="kw ant">$&</mark>'); }
 function renderQuiz(){
   const d=cur();
   if(d.words.length<4) return $('#stage').innerHTML=needWords(4);
@@ -886,7 +887,7 @@ function renderQuiz(){
   const {q:qq}=Q, a=Q.answered;
   $('#stage').innerHTML=`<div class="panel">
     <div class="toolbar"><span class="count">Câu ${Q.i+1}/${Q.list.length}</span><span class="count">Đúng ${Q.right}</span></div>
-    <div><div class="qprompt">${hlPrompt(qq.prompt)}</div><div class="qcue ${qq.word?'word':''}">${qq.word?esc(qq.cue):`${qq.pre??'= '}${esc(qq.cue)}`}${qq.word&&canSpeak?' '+speakBtn(qq.cue):''}</div></div>
+    <div><div class="qprompt">${hlPrompt(qq.prompt)}</div><div class="qcue ${qq.word?'word':''}">${qq.word?esc(qq.cue):`${qq.pre!=null?esc(qq.pre):'<span style="color:var(--moss)">= </span>'}${esc(qq.cue)}`}${qq.word&&canSpeak?' '+speakBtn(qq.cue):''}</div></div>
     <div class="opts">${qq.opts.map((o,i)=>`<button class="opt ${a!=null?(o.ok?'right':(i===a?'wrong':'')):''}" data-act="ans" data-i="${i}" ${a!=null?'disabled':''}><span class="k">${a!=null?(o.ok?'✓':(i===a?'✗':i+1)):i+1}</span><span class="t">${esc(o.label)}</span></button>`).join('')}</div>
     ${a!=null?`<div class="feedback"><div class="verdict ${qq.opts[a].ok?'ok':'no'}">${qq.opts[a].ok?'Chính xác.':'Chưa đúng. Ghi lại cả dòng này nhé:'}</div>${detail(qq.e,{withWord:true})}
       <div><button class="btn primary" data-act="nextq" id="nextq">Câu tiếp <kbd style="font-size:.75rem;opacity:.8">Enter</kbd></button></div></div>`:''}
@@ -992,7 +993,7 @@ function renderSyn(){
   if(!S || S.deck!==d.id){ const list=studyOrder({words:pool, progress:d.progress}).slice(0,Math.min(10,pool.length)); S={deck:d.id, list, i:0, right:0, q:makeS(list[0], d)}; }
   if(S.i>=S.list.length) return $('#stage').innerHTML=doneScreen('Kết quả bài tập đồng nghĩa', `${S.right}/${S.list.length}`, 'bài làm đúng');
   const q=S.q, e=q.e;
-  const head=`<div class="toolbar"><span class="count">Bài ${S.i+1}/${S.list.length} · ${({pick:'Chọn tất cả từ đồng nghĩa',odd:'Tìm từ khác nhóm',sort:'Đồng nghĩa hay trái nghĩa',recall:'Viết từ đồng nghĩa'})[q.t]}</span><span class="count">Đúng ${S.right}</span></div>`;
+  const head=`<div class="toolbar"><span class="count">Bài ${S.i+1}/${S.list.length} · ${hlPrompt(({pick:'Chọn tất cả từ đồng nghĩa',odd:'Tìm từ khác nhóm',sort:'Đồng nghĩa hay trái nghĩa',recall:'Viết từ đồng nghĩa'})[q.t])}</span><span class="count">Đúng ${S.right}</span></div>`;
   const wordCue = w => `<div class="wordline" style="margin-top:0"><span class="qcue word">${esc(w)}</span>${speakBtn(w)}</div>`;
   const answered = q.t==='pick' ? q.done : q.t==='recall' ? !!q.res : q.ans!=null;
   let body='', verdict='', note='';
@@ -1004,7 +1005,7 @@ function renderSyn(){
       ${q.done?'':`<div><button class="btn primary" data-act="scheck" ${q.sel.size?'':'disabled'}>Kiểm tra</button></div>`}`;
     if(q.done){ verdict=q.ok?'Chính xác, bạn chọn đủ cả nhóm.':'Chưa đúng hết. Nhóm đồng nghĩa đầy đủ:'; }
   } else if(q.t==='odd'){
-    body=`<div><div class="qprompt">Từ nào KHÔNG cùng nghĩa với các từ còn lại?</div></div>
+    body=`<div><div class="qprompt">Từ nào <mark class="kw ant">KHÔNG cùng nghĩa</mark> với các từ còn lại?</div></div>
       <div class="opts">${q.opts.map((o,i)=>`<button class="opt ${q.ans!=null?(o.ok?'right':(i===q.ans?'wrong':'')):''}" data-act="sodd" data-i="${i}" ${q.ans!=null?'disabled':''}><span class="k">${q.ans!=null?(o.ok?'✓':(i===q.ans?'✗':i+1)):i+1}</span><span class="t">${esc(o.l)}</span></button>`).join('')}</div>`;
     if(q.ans!=null){
       const o=q.opts.find(x=>x.ok), ok=q.opts[q.ans].ok, src=o.ant?null:ownerOf(o.l);
