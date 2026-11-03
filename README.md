@@ -67,6 +67,7 @@ Mỗi lần đưa ảnh vào là một **bài**. Nên đặt tên bài theo unit
 | **Bài tập đồng nghĩa** | Chọn đủ nhóm đồng nghĩa, tìm từ khác nhóm, phân biệt đồng nghĩa / trái nghĩa, viết từ đồng nghĩa. |
 | **Gõ từ** | Nhìn nghĩa, gõ lại từ tiếng Anh. |
 | **Ghép cặp** | Nối từ với nghĩa của nó. |
+| **Kiểm tra** | Với mỗi từ gốc, tự gõ lại TẤT CẢ từ đồng nghĩa và trái nghĩa; cuối bài có điểm và danh sách từ cần ôn. |
 | **Bài học** | Thêm, sửa, xoá bài; sao lưu và khôi phục. |
 
 Ứng dụng nhớ mức độ thuộc của từng từ (0–5) và ưu tiên cho bạn ôn những từ hay quên.

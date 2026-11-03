@@ -184,6 +184,19 @@ select{appearance:auto}
 mark.kw{padding:1px 8px;border-radius:7px;font-weight:700;background:var(--moss-soft);color:var(--moss);white-space:nowrap}
 mark.kw.ant{background:var(--ant-soft);color:var(--ant)}
 .count mark.kw{padding:0 6px;font-weight:600}
+.tgrp{display:flex;flex-direction:column;gap:8px}
+.tgrp-h{display:flex;align-items:center;gap:8px;font-weight:700}
+.tslots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px}
+.tslot{display:flex;flex-direction:column;gap:3px}
+.tslot .input{border-left:4px solid var(--moss)}
+.tgrp.ant .tslot .input{border-left-color:var(--ant)}
+.tslot .why{font-size:.8rem;color:var(--ant)}
+.tslot .why.ok{color:var(--moss)}
+.tmiss{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.treview{display:flex;flex-direction:column;gap:10px}
+.treview .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 0;border-top:1px solid var(--rule)}
+.treview .row b{font-family:var(--f-display);font-size:1.1rem;margin-right:6px}
+
 .oddinfo{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
 .oddw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .oddw .qcue{font-size:1.5rem}
@@ -660,7 +673,8 @@ const BUILTIN_ID='mau-kakapo';
 const decks=new Map();
 decks.set(BUILTIN_ID,{id:BUILTIN_ID, name:'Kākāpō (bài mẫu)', words:parseText(BUILTIN_TEXT).entries, progress:{}, builtin:true, created:0, cm:0});
 decks.get(BUILTIN_ID)._sig=deckSig(decks.get(BUILTIN_ID));
-const MODES=[['list','Danh sách'],['cards','Thẻ ghi nhớ'],['quiz','Trắc nghiệm'],['syn','Bài tập đồng nghĩa'],['type','Gõ từ'],['match','Ghép cặp'],['decks','Bài học']];
+const MODES=[['list','Danh sách'],['cards','Thẻ ghi nhớ'],['quiz','Trắc nghiệm'],['syn','Bài tập đồng nghĩa'],['type','Gõ từ'],['match','Ghép cặp'],['test','Kiểm tra'],['decks','Bài học']];
+let K=null;   // the "Kiểm tra" session
 let curId=BUILTIN_ID, mode='cards';
 try{ const s=JSON.parse(localStorage.getItem('sotu.ui')||'{}'); if(s.mode && MODES.some(m=>m[0]===s.mode)) mode=s.mode; if(s.cur) curId=s.cur; }catch{}
 const ALL_ID='__all';
@@ -818,10 +832,10 @@ function animateStage(){
   const st=$('#stage'); st.classList.remove('tabin'); void st.offsetWidth; st.classList.add('tabin');
 }
 function renderMode(){
-  ({cards:renderCards, quiz:renderQuiz, syn:renderSyn, type:renderType, match:renderMatch, list:renderList, decks:renderDecks})[mode]();
+  ({cards:renderCards, quiz:renderQuiz, syn:renderSyn, type:renderType, match:renderMatch, test:renderTest, list:renderList, decks:renderDecks})[mode]();
 }
 function renderAll(){ renderDeckSel(); renderStats(); renderTabs(); renderMode(); }
-function resetSessions(){ C=Q=T=M=S=null; posEditKey=null; }
+function resetSessions(){ C=Q=T=M=S=K=null; posEditKey=null; }
 
 /* ---------- 1. flashcards ---------- */
 let C=null, cardDir='word';
@@ -1059,6 +1073,89 @@ function synRecall(){
   synScore(!!hit, !!hit && q.hint>0);
 }
 function synNext(){ S.i++; if(S.i<S.list.length) S.q=makeS(S.list[S.i], cur()); renderSyn(); }
+
+
+/* ---------- 7. test: write every synonym and antonym of each headword ---------- */
+const looseKey = x => [norm(x), norm(String(x).replace(/\s*\([^)]*\)/g,'')), norm(String(x).replace(/[()]/g,''))];
+function matchIn(list, v){ const k=norm(v); if(!k) return -1; return list.findIndex(x=>looseKey(x).includes(k)); }
+function testItems(e){ return {syn:shortSyn(e), ant:e.ant.filter(a=>pronOK(a))}; }
+function makeK(e){ const it=testItems(e); return {e, syn:it.syn, ant:it.ant, vals:{s:it.syn.map(()=> ''), a:it.ant.map(()=> '')}, hint:false, res:null}; }
+function renderTest(){
+  const d=cur(), pool=d.words.filter(e=>{ const it=testItems(e); return it.syn.length || it.ant.length; });
+  if(!pool.length) return $('#stage').innerHTML=`<div class="panel empty">Bài này chưa có từ nào có từ đồng nghĩa hoặc trái nghĩa để kiểm tra. Thêm từ ở mục <button class="btn small" data-act="goto" data-mode="decks">Bài học</button></div>`;
+  if(!K || K.deck!==d.id){ const list=studyOrder({words:pool, progress:d.progress}); K={deck:d.id, list, i:0, got:0, total:0, perfect:0, log:[], q:makeK(list[0])}; }
+  if(K.i>=K.list.length) return renderTestDone();
+  const q=K.q, e=q.e, r=q.res;
+  const slot=(k,i,list)=>{
+    const v=q.vals[k][i], rs=r?.[k]?.[i];
+    const ph = q.hint && !r ? hintMask(list[i], 1) : (k==='s'?'từ đồng nghĩa '+(i+1):'từ trái nghĩa '+(i+1));
+    return `<label class="tslot"><input class="input ${rs?(rs.ok?'ok':'no'):''}" data-tk="${k}" data-ti="${i}" value="${esc(v)}" placeholder="${esc(ph)}" ${r?'readonly':''} autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="${k==='s'?'Từ đồng nghĩa':'Từ trái nghĩa'} ${i+1}">
+      ${rs&&rs.note?`<span class="why ${rs.ok?'ok':''}">${rs.note}</span>`:''}</label>`;
+  };
+  const group=(k,list,label,cls)=> list.length ? `<div class="tgrp ${cls}"><div class="tgrp-h"><mark class="kw ${cls}">${label}</mark><span class="muted" style="font-weight:500;font-size:.88rem">${list.length} từ</span></div>
+      <div class="tslots">${list.map((_,i)=>slot(k,i,list)).join('')}</div></div>` : '';
+  let feedback='';
+  if(r){
+    const missS=q.syn.filter((_,i)=>!r.foundS.has(i)), missA=q.ant.filter((_,i)=>!r.foundA.has(i));
+    const verdict = r.found===r.total ? 'Chính xác, đủ cả!' : r.found ? `Đúng ${r.found}/${r.total}.` : 'Chưa đúng từ nào.';
+    feedback=`<div class="feedback"><div class="verdict ${r.found===r.total?'ok':'no'}">${verdict}</div>
+      ${missS.length||missA.length?`<div class="tmiss"><span class="muted">Còn thiếu:</span>${missS.map(x=>chip(e,x)).join('')}${missA.map(x=>chip(e,x,'a')).join('')}</div>`:''}
+      ${detail(e,{withWord:true})}
+      <div class="row-btns"><button class="btn primary" data-act="nextk" id="nextk">${K.i+1<K.list.length?'Từ tiếp':'Xem kết quả'} <kbd style="font-size:.75rem;opacity:.8">Enter</kbd></button></div></div>`;
+  }
+  $('#stage').innerHTML=`<div class="panel">
+    <div class="toolbar"><span class="count">Từ ${K.i+1}/${K.list.length} · Kiểm tra cả bài</span><span class="count">Điểm ${K.got}/${K.total}</span></div>
+    <div><div class="qprompt">Viết TẤT CẢ <mark class="kw">từ đồng nghĩa</mark>${q.ant.length?` và <mark class="kw ant">từ trái nghĩa</mark>`:''} của</div>
+      <div class="wordline" style="margin-top:4px"><span class="qcue word">${esc(e.w)}</span>${speakBtn(e.w)}${posBadge(e)}</div>
+      ${e.vi?`<div class="muted" style="margin-top:2px">VI · ${esc(e.vi)}</div>`:''}
+      ${!q.ant.length?`<div class="muted" style="font-size:.85rem;margin-top:2px">Từ này không có từ trái nghĩa trong bài.</div>`:''}</div>
+    <form id="testform" style="display:flex;flex-direction:column;gap:14px" autocomplete="off">
+      ${group('s',q.syn,'= Đồng nghĩa','')}
+      ${group('a',q.ant,'# Trái nghĩa','ant')}
+      ${r?'':`<div class="row-btns"><button class="btn primary" type="submit">Kiểm tra</button><button class="btn" type="button" data-act="khint" ${q.hint?'disabled':''}>Gợi ý chữ cái đầu</button><button class="btn" type="button" data-act="kgive">Xem đáp án</button></div>`}
+    </form>
+    ${feedback}
+  </div>
+  <p class="keys" style="margin-top:12px">Gõ theo thứ tự nào cũng được · <kbd>Enter</kbd> kiểm tra / từ tiếp ·${sfxBtn()}</p>`;
+  const f=$('#testform');
+  f.addEventListener('submit',ev=>{ ev.preventDefault(); testCheck(); });
+  f.querySelectorAll('input[data-tk]').forEach(inp=>inp.addEventListener('input',()=>{ q.vals[inp.dataset.tk][+inp.dataset.ti]=inp.value; }));
+  if(!r){ const first=[...f.querySelectorAll('input[data-tk]')].find(x=>!x.value); (first||f.querySelector('input'))?.focus({preventScroll:true}); }
+  else $('#nextk')?.focus({preventScroll:true});
+}
+function testCheck(give=false){
+  const q=K.q; if(q.res) return;
+  const res={s:[], a:[], foundS:new Set(), foundA:new Set(), found:0, total:q.syn.length+q.ant.length};
+  const grade1=(k, own, other, found, otherLabel)=> q.vals[k].map(v=>{
+    if(!String(v).trim()) return null;
+    const i=matchIn(own, v);
+    if(i>=0 && !found.has(i)){ found.add(i); return {ok:true}; }
+    if(i>=0) return {ok:false, note:'Trùng với ô khác.'};
+    if(matchIn(other, v)>=0) return {ok:false, note:otherLabel};
+    if(norm(v)===norm(q.e.w)) return {ok:false, note:'Đó là chính từ gốc.'};
+    const o=ownerOf(v); return {ok:false, note: o && o.e!==q.e ? `Đó là từ ${o.rel} của ${esc(o.e.w)}.` : 'Không có trong nhóm này.'};
+  });
+  if(!give){
+    res.s=grade1('s', q.syn, q.ant, res.foundS, 'Đó là từ trái nghĩa.');
+    res.a=grade1('a', q.ant, q.syn, res.foundA, 'Đó là từ đồng nghĩa.');
+  }
+  res.found=res.foundS.size+res.foundA.size;
+  q.res=res;
+  const all=res.found===res.total;
+  K.got+=res.found; K.total+=res.total; if(all && !q.hint) K.perfect++;
+  K.log.push({e:q.e, missS:q.syn.filter((_,i)=>!res.foundS.has(i)), missA:q.ant.filter((_,i)=>!res.foundA.has(i))});
+  grade(q.e, all, all && q.hint);
+  renderTest();
+  if(!give) fxAnswer(all, '#stage .input.ok, #stage .verdict'); else sfx(false);
+}
+function testNext(){ K.i++; if(K.i<K.list.length) K.q=makeK(K.list[K.i]); renderTest(); }
+function renderTestDone(){
+  const pct=K.total?Math.round(K.got*100/K.total):0;
+  const miss=K.log.filter(x=>x.missS.length||x.missA.length);
+  $('#stage').innerHTML=doneScreen('Kết quả kiểm tra', `${K.got}/${K.total}`, `từ đồng nghĩa và trái nghĩa viết đúng (${pct}%) · ${K.perfect}/${K.list.length} từ gốc đúng đủ`)
+    + (miss.length?`<div class="panel treview" style="margin-top:14px"><span class="label">Cần ôn lại (${miss.length} từ)</span>
+      ${miss.map(x=>`<div class="row"><b>${esc(x.e.w)}</b>${x.missS.map(s=>chip(x.e,s)).join('')}${x.missA.map(s=>chip(x.e,s,'a')).join('')}</div>`).join('')}</div>`:'');
+}
 
 /* ---------- 3. type the word ---------- */
 let T=null;
@@ -2128,6 +2225,9 @@ const acts={
   ml:b=>matchPick('l',+b.dataset.i),
   mr:b=>matchPick('r',+b.dataset.i),
   restart:()=>{ resetSessions(); renderMode(); },
+  nextk:()=>testNext(),
+  khint:()=>{ if(K?.q && !K.q.res){ K.q.hint=true; renderTest(); } },
+  kgive:()=>testCheck(true),
   goto:b=>{ mode=b.dataset.mode; saveUI(); renderTabs(); renderMode(); },
   reset:()=>{ if(!resetArmed){ resetArmed=true; return renderList(); } const d=cur(); resetArmed=false;
     if(d.virtual){ for(const x of decks.values()){ x.progress={}; scheduleSave(x); } resetSessions(); renderStats(); renderList(); return toast('Đã đặt lại tiến độ mọi bài.'); }
@@ -2188,6 +2288,8 @@ document.addEventListener('keydown',ev=>{
   } else if(mode==='quiz' && Q){
     if(/^[1-4]$/.test(ev.key) && Q.answered==null && Q.q && +ev.key<=Q.q.opts.length) answerQuiz(+ev.key-1);
     else if(ev.key==='Enter' && Q.answered!=null && !ev.target.closest?.('button')){ ev.preventDefault(); nextQuiz(); }
+  } else if(mode==='test' && K && K.q?.res && K.i<K.list.length){
+    if(ev.key==='Enter' && !ev.target.closest?.('button')){ ev.preventDefault(); testNext(); }
   } else if(mode==='syn' && S && S.q && S.i<S.list.length){
     const q=S.q, n=+ev.key, answered = q.t==='pick' ? q.done : q.t==='recall' ? !!q.res : q.ans!=null;
     if(!answered && /^[1-9]$/.test(ev.key)){
