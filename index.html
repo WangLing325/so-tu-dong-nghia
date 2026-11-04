@@ -1044,10 +1044,11 @@ function renderSyn(){
   } else {
     const syns=shortSyn(e);
     body=`<div><div class="qprompt">Viết MỘT <mark class="kw">từ đồng nghĩa</mark> với</div>${wordCue(e.w)}${e.vi?`<div class="muted">VI · ${esc(e.vi)}</div>`:''}</div>
-      ${q.hint&&!q.res?`<div class="chips">${syns.map(s=>`<span class="chip mask" style="font-size:1.05rem;letter-spacing:.12em">${esc(hintMask(s,q.hint))}</span>`).join('')}</div>`:''}
+      ${q.hint&&!q.res?`<div class="chips">${syns.map(s=>`<span class="chip mask" style="font-size:1.05rem;letter-spacing:.12em">${esc(hintMask(s,q.hint))}</span>`).join('')}</div>
+        <div class="muted" style="font-size:.82rem;${q.hint>=3?'color:var(--ant)':''}">${q.hint>=3?'Đã dùng gợi ý chữ thứ 3: trả lời đúng vẫn không được cộng điểm.':'Gợi ý chữ cái đầu và chữ thứ 2 không bị trừ điểm.'}</div>`:''}
       <form class="typerow" id="synform" autocomplete="off">
         <input class="input ${q.res?(q.res.ok?'ok':'no'):''}" id="synin" placeholder="Gõ một từ đồng nghĩa rồi bấm Enter" value="${esc(q.val)}" ${q.res?'readonly':''} autocapitalize="off" spellcheck="false">
-        ${q.res?'':`<button class="btn primary" type="submit">Kiểm tra</button><button class="btn" type="button" data-act="shint">${q.hint?'Thêm gợi ý':'Gợi ý'}</button>`}
+        ${q.res?'':`<button class="btn primary" type="submit">Kiểm tra</button><button class="btn" type="button" data-act="shint">${['Gợi ý chữ cái đầu','Gợi ý chữ thứ 2','Gợi ý chữ thứ 3 (mất điểm)'][q.hint]||'Thêm gợi ý (mất điểm)'}</button>`}
       </form>`;
     if(q.res){ verdict=q.res.ok?(q.res.ant?'':'Chính xác.'):(q.res.ant?'Đó là từ trái nghĩa, không phải đồng nghĩa.':'Chưa đúng.'); note=`Nhóm đồng nghĩa của <b>${esc(e.w)}</b> (bấm để nghe):`; }
   }
@@ -1070,7 +1071,7 @@ function synRecall(){
   const ant=q.e.ant.some(a=>norm(a)===v);
   q.res={ok:!!hit, ant}; if(hit) speak(hit);
   if(hit) q.res.msg=null;
-  synScore(!!hit, !!hit && q.hint>0);
+  synScore(!!hit, !!hit && q.hint>=3);   // the first two letters are free hints; from the third letter on, a right answer earns no point
 }
 function synNext(){ S.i++; if(S.i<S.list.length) S.q=makeS(S.list[S.i], cur()); renderSyn(); }
 
